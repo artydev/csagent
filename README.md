@@ -1,5 +1,5 @@
-"# csagent-ui" 
-Ce projet est un agent de codage IA croisée-platforme qui peut effectuer automatiquement des tâches en interagissant avec le système de fichiers et en exécutant des commandes shell via un LLM (Modèle de Langage à Grande Échelle).
+*# csagent-ui* 
+Ce projet est un agent de codage IA croisée-platforme qui peut effectuer automatiquement des tâches en interagissant avec le système de fichiers et en exécutant des commandes shell via un **LLM** (Modèle de Langage à Grande Échelle).
 |
 | ## Fonctionnalités principales :
 |
@@ -22,7 +22,7 @@ Ce projet est un agent de codage IA croisée-platforme qui peut effectuer automa
 |
 | 4. Fonctions de sécurité :
 | - Opérations destructrices (sh et write_file) nécessitent une confirmation en mode interactif
-| - Mode "dry-run" pour tester sans faire de changements
+| - Mode *dry-run* pour tester sans faire de changements
 | - Mémorisation de l'historique pour gérer la longueur de la conversation
 |
 | 5. Interface utilisateur :
