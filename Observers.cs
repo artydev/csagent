@@ -1,0 +1,53 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
+using Microsoft.AspNetCore.Http;
+
+namespace CsAgentUI;
+
+// ── Console Observer ──
+public class ConsoleObserver : IAgentObserver
+{
+    public Task OnStep(int n, int m) { UI.Step(n, m); return Task.CompletedTask; }
+    public Task OnThought(string t) { UI.AssistantText(t); return Task.CompletedTask; }
+    public Task OnToolCall(string n, string a) { UI.ToolCall(n, Pretty(a)); return Task.CompletedTask; }
+    public Task OnToolResult(string r, bool e) { UI.ToolResult(r, e); return Task.CompletedTask; }
+    public Task OnDone(string m) { UI.Success(m); return Task.CompletedTask; }
+    public Task OnError(string m) { UI.Error(m); return Task.CompletedTask; }
+    private string Pretty(string r) => JsonNode.Parse(r)?.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) ?? r;
+}
+
+// ── Web SSE Observer ──
+public class SseObserver(HttpResponse res) : IAgentObserver
+{
+    private static int _msgId = 0;
+
+    private async Task Send(string type, object data)
+    {
+        var id = System.Threading.Interlocked.Increment(ref _msgId);
+        var payload = new SseMessage(id, type, data);
+        var json = JsonSerializer.Serialize(payload, WebJsonContext.Default.SseMessage);
+        await res.WriteAsync($"data: {json}\n\n");
+        await res.Body.FlushAsync();
+    }
+
+    public Task OnStep(int n, int m) => Send("step", new SseStep(n, m));
+    public Task OnThought(string t) => Send("thought", t);
+    public Task OnToolCall(string n, string a) => Send("call", new SseCall(n, a));
+    public Task OnToolResult(string r, bool e) => Send("result", new SseResult(r, e));
+    public Task OnDone(string m) => Send("done", m);
+    public Task OnError(string m) => Send("error", m);
+}
+
+// ── AOT Source Generation ──
+public record SseMessage(int id, string type, object data);
+public record SseStep(int n, int m);
+public record SseCall(string n, string a);
+public record SseResult(string r, bool e);
+
+[JsonSourceGenerationOptions(WriteIndented = false)]
+[JsonSerializable(typeof(SseMessage))]
+[JsonSerializable(typeof(SseStep))]
+[JsonSerializable(typeof(SseCall))]
+[JsonSerializable(typeof(SseResult))]
+internal partial class WebJsonContext : JsonSerializerContext { }
