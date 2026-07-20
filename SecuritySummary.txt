@@ -1,0 +1,38 @@
+SECURITY IMPLEMENTATIONS IN CSAgent
+
+1. DEFAULT CONFIRMATION ENFORCEMENT
+   - AgentOptions now defaults to Confirm: true
+   - All destructive actions require explicit user approval
+   - Even if user sets Confirm: false, system enforces it for safety
+
+2. PATH SAFETY VALIDATION
+   - IsSafePath() method restricts file operations to current directory
+   - Prevents writing to system directories or parent directories
+   - All file operations validated before execution
+
+3. SHELL COMMAND FILTERING
+   - IsSafeCommand() blocks dangerous patterns:
+     * rm -rf, sudo, chmod, wget, curl
+     * eval, exec, shutdown, reboot
+     * dd, mkfs, &&, ||, ;, |
+     * System paths like /etc/, /usr/bin/, /bin/
+
+4. DESTRUCTIVE ACTION DETECTION
+   - IsDestructive() identifies: "sh" and "write_file" 
+   - These always require user confirmation
+
+5. WEB INTERFACE SECURITY FEEDBACK
+   - Warning and danger message types supported
+   - Visual indicators in web UI for security events
+   - Clear messaging about blocked operations
+
+6. SYSTEM MESSAGE ENHANCEMENTS
+   - Updated system prompt includes security rules:
+     * ALL DESTRUCTIVE ACTIONS REQUIRE USER APPROVAL
+     * FILE OPERATIONS ARE RESTRICTED TO CURRENT DIRECTORY
+     * SHELL COMMANDS ARE FILTERED FOR DANGEROUS OPERATIONS
+
+7. CODE STRUCTURE IMPROVEMENTS
+   - Moved API endpoints to Endpoints/ folder for better organization
+   - Enhanced error handling with security-focused messages
+   - Consistent security approach across all operations

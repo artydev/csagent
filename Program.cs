@@ -1,4 +1,5 @@
 using CsAgentUI;
+using CsAgentUI.Endpoints;
 using System.Diagnostics;
 using System.Text.Json.Nodes;
 
@@ -20,33 +21,17 @@ static string GetMemoryFile(string[] args)
 var memFile = GetMemoryFile(args);
 
 // ── UI Mode (Web Server) ──
-// ── UI Mode (Web Server) ──
 if (isUiMode)
 {
     var app = builder.Build();
 
-    // 1. Serve the UI from the embedded string (AOT-safe)
+    // Serve the UI from the embedded string (AOT-safe)
     app.MapGet("/", () => Results.Content(StaticAssets.HtmlUI, "text/html"));
 
-    // 2. Existing API endpoint
-    app.MapGet("/api/chat", async (HttpContext ctx, string prompt) =>
-    {
-        ctx.Response.Headers.ContentType = "text/event-stream";
-        var observer = new SseObserver(ctx.Response);
+    // Map API endpoints
+    app.MapEndpoints(memFile);
 
-        var apiKey = Environment.GetEnvironmentVariable("ALBERT_API_KEY") ?? "";
-        if (string.IsNullOrEmpty(apiKey)) { await observer.OnError("API Key not set."); return; }
-
-        var msgs = await MemoryStore.LoadAsync(memFile);
-        if (msgs.Count == 0) msgs.Add(CodingAgent.SystemMessage(OperatingSystem.IsWindows()));
-
-        msgs.Add(new JsonObject { ["role"] = "user", ["content"] = prompt });
-
-        using var agent = new CodingAgent(apiKey, "https://albert.api.etalab.gouv.fr/v1", "Qwen/Qwen3-Coder-30B-A3B-Instruct", new AgentOptions(), observer);
-        await agent.RunAsync(msgs, memFile);
-    });
-
-    // 3. Register browser launch after server starts
+    // Register browser launch after server starts
     app.Lifetime.ApplicationStarted.Register(() =>
     {
         Console.WriteLine("\n--- Server started at http://localhost:5050 ---");
@@ -61,8 +46,6 @@ if (isUiMode)
     app.Run("http://localhost:5050");
 }
 
-
-
 // ── CLI Mode ──
 else
 {
@@ -73,7 +56,8 @@ else
     var messages = await MemoryStore.LoadAsync(memFile);
     if (messages.Count == 0) messages.Add(CodingAgent.SystemMessage(OperatingSystem.IsWindows()));
 
-    using var agent = new CodingAgent(apiKey, "https://albert.api.etalab.gouv.fr/v1", "Qwen/Qwen3-Coder-30B-A3B-Instruct", new AgentOptions(), new ConsoleObserver());
+    // Default to confirm mode for enhanced security (this is now the default in AgentOptions)
+    using var agent = new CodingAgent(apiKey, "https://albert.api.etalab.gouv.fr/v1", "Qwen/Qwen3-Coder-30B-A3B-Instruct", new AgentOptions(Confirm: true), new ConsoleObserver());
 
     while (true)
     {

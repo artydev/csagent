@@ -1,4 +1,4 @@
-﻿namespace CsAgentUI;
+namespace CsAgentUI;
 
 public interface IAgentObserver
 {
@@ -8,4 +8,6 @@ public interface IAgentObserver
     Task OnToolResult(string result, bool isError);
     Task OnDone(string message);
     Task OnError(string message);
+    Task OnWarning(string message);
+    Task OnDanger(string message);
 }
