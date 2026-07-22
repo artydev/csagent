@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Text.Json.Nodes;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.SetMinimumLevel(LogLevel.Critical);
+
 var isUiMode = args.Contains("--ui");
 
 // Helper to find memory file from args

@@ -253,7 +253,7 @@ public static class StaticAssets
     <h2>
     <span class="status-dot"></span>
     CSAgent
-    <span class="version">ENGINE v1.0</span>
+    <span class="version">DUAL v1.0</span>
     </h2>
     </div>
 

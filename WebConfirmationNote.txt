@@ -1,0 +1,48 @@
+WEB UI CONFIRMATION IMPLEMENTATION NOTES
+
+The current implementation has a limitation: when running in Web UI mode (--ui), 
+confirmations still occur in the console/terminal where the application is running,
+not in the web browser itself.
+
+This is because:
+1. The agent runs as a console application even when serving web content
+2. The confirmation mechanism uses UI.Confirm() which is console-based
+3. The web interface is just a display layer for the agent's output
+
+TO IMPLEMENT TRUE WEB-BASED CONFIRMATIONS, THE FOLLOWING WOULD BE NEEDED:
+
+1. **Architecture Change**: 
+   - Need to modify the agent to detect web vs console mode
+   - Add asynchronous confirmation handling
+   - Implement web-based confirmation endpoints
+
+2. **Required Components**:
+   - Confirmation request endpoint (/api/confirm-request)
+   - Confirmation response endpoint (/api/confirm-response)  
+   - Web UI polling mechanism for confirmation requests
+   - State management for pending confirmations
+
+3. **Complexity Level**: 
+   - Significant architectural changes
+   - Would require major updates to the SSE communication
+   - Need to handle async confirmation flows properly
+
+CURRENT STATE:
+✅ All security features work correctly
+✅ Path restrictions enforced
+✅ Shell command filtering active
+✅ Destructive action detection in place
+✅ Default confirmation enabled
+
+LIMITATION:
+❌ Web UI doesn't show confirmation dialogs - still uses console confirmations
+
+RECOMMENDATION:
+For immediate security benefits, the current implementation is sufficient.
+Web-based confirmations would be a future enhancement that requires:
+- Complete redesign of the web communication flow
+- Asynchronous handling of confirmation requests
+- Proper state management for concurrent operations
+
+The security measures I've implemented are still very effective - all destructive actions 
+require user approval, path restrictions are enforced, and dangerous commands are filtered.

@@ -11,6 +11,7 @@ public static class ApiEndpoints
         app.MapGet("/api/chat", async (HttpContext ctx, string prompt) =>
         {
             ctx.Response.Headers.ContentType = "text/event-stream";
+            
             var observer = new SseObserver(ctx.Response);
 
             var apiKey = Environment.GetEnvironmentVariable("ALBERT_API_KEY") ?? "";
@@ -21,6 +22,7 @@ public static class ApiEndpoints
             }
 
             var msgs = await MemoryStore.LoadAsync(memoryFile);
+            
             if (msgs.Count == 0) 
                 msgs.Add(CodingAgent.SystemMessage(OperatingSystem.IsWindows()));
 
