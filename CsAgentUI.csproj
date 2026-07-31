@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
@@ -17,6 +17,7 @@
 
 	<ItemGroup>
 	  <Folder Include="wwwroot\documentation\" />
+	  <EmbeddedResource Include="README.md" />
 		<EmbeddedResource Include="wwwroot\documentation\README.md" />
 	</ItemGroup>
 
