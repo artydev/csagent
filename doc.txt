@@ -47,7 +47,7 @@
   Run the web server
   ==================
 
-  dotnet run -- --ui
+  csagent --ui
   
 
   Then open your browser to **http://localhost:5050**.
@@ -55,7 +55,7 @@
   Run in CLI Mode
 
   set ALBERT_API_KEY=your-api-key-here
-  dotnet run
+  csagent run
   
 
   ────────────────────────────────────────────────────────────
@@ -120,19 +120,19 @@
   Web UI with custom memory file
   ==============================
 
-  dotnet run -- --ui --mem my_project_memory.json
+  csagent --ui --mem my_project_memory.json
 
 
   CLI mode with a specific memory file
   ====================================
 
-  dotnet run my_memory.json
+  csagent my_memory.json
 
 
   Dry run mode
   ============
 
-  dotnet run -- --dry-run
+  csagent --dry-run
   
 
   ────────────────────────────────────────────────────────────
@@ -280,7 +280,7 @@
   ===========
 
   set ALBERT_API_KEY=your-key
-  dotnet run -- --ui
+  csagent --ui
   
 
   ────────────────────────────────────────────────────────────
