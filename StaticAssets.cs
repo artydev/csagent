@@ -10,6 +10,10 @@ public static class StaticAssets
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CSAgent Console</title>
 
+    <!-- Prism.js for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" rel="stylesheet" />
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
     <style>
@@ -214,6 +218,21 @@ public static class StaticAssets
         box-shadow:0 0 0 4px var(--primary-glow);
     }
 
+    /* Code block styling for syntax highlighting */
+    .result pre {
+        background: rgba(0, 0, 0, 0.25);
+        border-radius: 8px;
+        padding: 12px 16px;
+        overflow-x: auto;
+        margin: 10px 0;
+        font-size: 13px !important;
+    }
+
+    .result code[class*="language-"] {
+        background: transparent !important;
+        font-size: 13px !important;
+    }
+
     #log::-webkit-scrollbar{
         width:8px;
     }
@@ -270,76 +289,103 @@ public static class StaticAssets
     id="in"
     autocomplete="off"
     placeholder="Ask CSAgent anything... (All destructive actions require approval)"
-    onkeypress="if(event.key==='Enter')run()">
+    onkeypress="if(event.key==='Enter'){run();}">
     </div>
 
     </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
 
     <script>
+    // Initialize Prism with explicit component loading for better reliability
+    document.addEventListener('DOMContentLoaded', function() {
+        // Ensure Prism is loaded and ready
+        if (typeof Prism !== 'undefined') {
+            // Load common languages explicitly to avoid autoloader issues
+            Prism.plugins.autoloader.languages_path = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/';
+        }
+    });
+
     function run(){
+        const input=document.getElementById("in");
+        const prompt=input.value.trim();
 
-    const input=document.getElementById("in");
-    const prompt=input.value.trim();
+        if(!prompt)return;
 
-    if(!prompt)return;
+        const log=document.getElementById("log");
 
-    const log=document.getElementById("log");
+        const user=document.createElement("div");
+        user.className="user-msg";
+        user.innerHTML=`<strong>> User:</strong> ${prompt}`;
+        log.appendChild(user);
 
-    const user=document.createElement("div");
-    user.className="user-msg";
-    user.innerHTML=`<strong>> User:</strong> ${prompt}`;
-    log.appendChild(user);
+        input.value="";
 
-    input.value="";
+        const stream=new EventSource(
+        `/api/chat?prompt=${encodeURIComponent(prompt)}`
+        );
 
-    const stream=new EventSource(
-    `/api/chat?prompt=${encodeURIComponent(prompt)}`
-    );
+        stream.onmessage=function(event){
+            const message=JSON.parse(event.data);
 
-    stream.onmessage=event=>{
+            const div=document.createElement("div");
 
-    const message=JSON.parse(event.data);
+            if(message.type==="done"){
+                div.className="done";
+                div.innerText="✓ Task completed successfully";
+                stream.close();
+            }else if(message.type==="warning"){
+                div.className="warning";
+                div.innerText="⚠ " + message.data;
+            }else if(message.type==="danger"){
+                div.className="danger";
+                div.innerText="✗ " + message.data;
+            }else{
+                div.className=message.type;
 
-    const div=document.createElement("div");
+                const content=
+                typeof message.data==="string"
+                ?message.data
+                :JSON.stringify(message.data,null,2);
 
-    if(message.type==="done"){
+                // For result messages, we'll wrap content in pre/code tags for syntax highlighting
+                if(message.type === "result") {
+                    // Create a pre element with appropriate class for Prism.js to highlight
+                    const preElement = document.createElement('pre');
+                    const codeElement = document.createElement('code');
+                    codeElement.className = 'language-javascript'; // Default to JavaScript
+                    codeElement.textContent = content;
+                    preElement.appendChild(codeElement);
+                    div.appendChild(preElement);
+                } else {
+                    div.innerText=`[${message.type}] ${content}`;
+                }
 
-    div.className="done";
-    div.innerText="✓ Task completed successfully";
-    stream.close();
+                log.appendChild(div);
+                
+                // After adding content, trigger syntax highlighting for the new content
+                if(message.type === "result") {
+                    // Use setTimeout to ensure DOM is updated before highlighting
+                    setTimeout(function() {
+                        try {
+                            if (typeof Prism !== 'undefined' && Prism.highlightAllUnder) {
+                                // Highlight only within the newly added div
+                                Prism.highlightAllUnder(div);
+                            }
+                        } catch(e) {
+                            console.error('Highlighting error:', e);
+                        }
+                    }, 10); // Small delay to ensure DOM update
+                }
+            }
+        };
 
-    }else if(message.type==="warning"){
-
-    div.className="warning";
-    div.innerText="⚠ " + message.data;
-
-    }else if(message.type==="danger"){
-
-    div.className="danger";
-    div.innerText="✗ " + message.data;
-
-    }else{
-
-    div.className=message.type;
-
-    const content=
-    typeof message.data==="string"
-    ?message.data
-    :JSON.stringify(message.data,null,2);
-
-    div.innerText=`[${message.type}] ${content}`;
-
-    }
-
-    log.appendChild(div);
-    log.scrollTop=log.scrollHeight;
-
-    };
-
-    stream.onerror=()=>{
-    stream.close();
-    };
-
+        stream.onerror=function(){
+            stream.close();
+        };
     }
     </script>
 
