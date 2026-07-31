@@ -36,7 +36,7 @@
 set ALBERT_API_KEY=your-api-key-here
 
 # Run the web server
-dotnet run -- --ui
+csagent --ui
 ```
 
 Then open your browser to **http://localhost:5050**.
@@ -96,10 +96,10 @@ You can override the default model in either mode using the `--model` argument (
 
 ```bash
 # CLI mode with a different model
-dotnet run -- --model gpt-4o
+csagent --model gpt-4o
 
 # Web UI mode with a different model
-dotnet run -- --ui --model deepseek-v4-flash
+csagent --ui --model deepseek-v4-flash
 ```
 
 ---
@@ -128,25 +128,25 @@ dotnet run -- --ui --model deepseek-v4-flash
 
 ```bash
 # Web UI with custom memory file
-dotnet run -- --ui --mem my_project_memory.json
+csagent --ui --mem my_project_memory.json
 
 # CLI mode with a specific memory file
 dotnet run my_memory.json
 
 # Dry run mode
-dotnet run -- --dry-run
+csagent --dry-run
 
 # Display version
-dotnet run -- --version
+csagent --version
 
 # Display documentation in terminal
-dotnet run -- --doc
+csagent --doc
 
 # Override the LLM model in CLI mode
-dotnet run -- --model gpt-4o-mini
+csagent --model gpt-4o-mini
 
 # Override the LLM model in Web UI mode
-dotnet run -- --ui --model deepseek-v4-flash
+csagent --ui --model deepseek-v4-flash
 ```
 
 ---
@@ -278,11 +278,11 @@ dotnet build
 ```bash
 # CLI mode
 set ALBERT_API_KEY=your-key
-dotnet run
+csagent
 
 # Web UI mode
 set ALBERT_API_KEY=your-key
-dotnet run -- --ui
+csagent --ui
 ```
 
 ---
