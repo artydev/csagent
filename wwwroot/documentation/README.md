@@ -95,6 +95,8 @@ The web UI is served at **http://localhost:5050**.
 | `--ui` | Start in Web UI mode (starts a web server) |
 | `--mem <file>` | Specify a custom memory/conversation file (default: `agent_memory.json`) |
 | `--dry-run` | Simulate tool execution without making changes |
+| `--version` | Display the current version of CSAgent and exit |
+| `--doc` | Display this documentation in a nicely formatted terminal view and exit |
 | `<file>` | Positional argument: specify a memory file without `--mem` flag |
 
 ### Examples
@@ -108,6 +110,12 @@ dotnet run my_memory.json
 
 # Dry run mode
 dotnet run -- --dry-run
+
+# Display version
+dotnet run -- --version
+
+# Display documentation in terminal
+dotnet run -- --doc
 ```
 
 ---

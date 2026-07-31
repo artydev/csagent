@@ -1,6 +1,7 @@
 using CsAgentUI;
 using CsAgentUI.Endpoints;
 using System.Diagnostics;
+using System.Reflection;
 using System.Text.Json.Nodes;
 
 const string Version = "0.2.0";
@@ -90,24 +91,35 @@ else
 }
 
 // ── Documentation Display ──
+
 static void ShowDocumentation()
 {
-    var docPath = Path.Combine(AppContext.BaseDirectory, "wwwroot", "documentation", "README.md");
+    var assembly = Assembly.GetExecutingAssembly();
 
-    // Try to find the README relative to the project or published output
-    if (!File.Exists(docPath))
-    {
-        // Fallback: look relative to current directory
-        docPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "documentation", "README.md");
-    }
+    // Find the embedded resource matching README.md regardless of namespace prefix
+    var resourceName = assembly.GetManifestResourceNames()
+        .FirstOrDefault(r => r.EndsWith("README.md", StringComparison.OrdinalIgnoreCase));
 
-    if (!File.Exists(docPath))
+    if (string.IsNullOrEmpty(resourceName))
     {
-        Console.Error.WriteLine("Error: README.md not found in wwwroot/documentation/");
+        Console.Error.WriteLine("Error: README.md embedded resource not found.");
         return;
     }
 
-    var lines = File.ReadAllLines(docPath);
+    using var stream = assembly.GetManifestResourceStream(resourceName);
+    if (stream == null)
+    {
+        Console.Error.WriteLine("Error: Could not read embedded README.md stream.");
+        return;
+    }
+
+    using var reader = new StreamReader(stream);
+    var lines = new List<string>();
+    string? fileLine;
+    while ((fileLine = reader.ReadLine()) != null)
+    {
+        lines.Add(fileLine);
+    }
 
     // Determine terminal width safely
     var termWidth = 80;
@@ -123,9 +135,9 @@ static void ShowDocumentation()
 
     // Detect if terminal supports ANSI colors
     var useColor = !Console.IsOutputRedirected
-                   && (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TERM"))
-                       || OperatingSystem.IsLinux()
-                       || OperatingSystem.IsMacOS());
+                  && (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TERM"))
+                      || OperatingSystem.IsLinux()
+                      || OperatingSystem.IsMacOS());
 
     foreach (var line in lines)
     {
@@ -277,7 +289,6 @@ static void ShowDocumentation()
         // ── Code block markers ──
         if (trimmed.StartsWith("```"))
         {
-            // Just skip code fence markers
             continue;
         }
 
@@ -289,7 +300,6 @@ static void ShowDocumentation()
 
             if (isHeader)
             {
-                // Table separator row — draw a line
                 if (useColor)
                 {
                     Console.ForegroundColor = ConsoleColor.DarkGray;
@@ -337,7 +347,6 @@ static void ShowDocumentation()
         // ── Regular paragraph ──
         if (!string.IsNullOrWhiteSpace(trimmed))
         {
-            // Handle inline bold markers
             if (useColor && trimmed.Contains("**"))
             {
                 var parts = SplitBold(trimmed);
@@ -369,6 +378,7 @@ static void ShowDocumentation()
 
     Console.WriteLine();
 }
+
 
 // Helper to split text by **bold** markers
 static List<(string text, bool isBold)> SplitBold(string input)

@@ -17,6 +17,7 @@
 
 	<ItemGroup>
 	  <Folder Include="wwwroot\documentation\" />
+		<EmbeddedResource Include="wwwroot\documentation\README.md" />
 	</ItemGroup>
 
 	<!-- No other PropertyGroups needed at the root level -->
