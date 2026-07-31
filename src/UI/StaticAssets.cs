@@ -414,7 +414,7 @@ public static class StaticAssets
 set ALBERT_API_KEY=your-api-key-here
 
 # Run the web server
-dotnet run -- --ui
+csagent --ui
 ```
 
 Then open your browser to **http://localhost:5050**.
@@ -423,7 +423,7 @@ Then open your browser to **http://localhost:5050**.
 
 ```bash
 set ALBERT_API_KEY=your-api-key-here
-dotnet run
+csagent
 ```
 
 ---
@@ -469,10 +469,10 @@ You can override the model in either mode using the `--model` argument (see [Com
 
 ```bash
 # CLI mode with a different model
-dotnet run -- --model gpt-4o
+csagent --model gpt-4o
 
 # Web UI mode with a different model
-dotnet run -- --ui --model gpt-4o
+csagent --ui --model gpt-4o
 ```
 
 ---
@@ -501,25 +501,25 @@ dotnet run -- --ui --model gpt-4o
 
 ```bash
 # Web UI with custom memory file
-dotnet run -- --ui --mem my_project_memory.json
+csagent --ui --mem my_project_memory.json
 
 # CLI mode with a specific memory file
 dotnet run my_memory.json
 
 # Dry run mode
-dotnet run -- --dry-run
+csagent --dry-run
 
 # Display version
-dotnet run -- --version
+csagent --version
 
 # Display documentation in terminal
-dotnet run -- --doc
+csagent --doc
 
 # Override the LLM model in CLI mode
-dotnet run -- --model gpt-4o-mini
+csagent --model gpt-4o-mini
 
 # Override the LLM model in Web UI mode
-dotnet run -- --ui --model gpt-4o-mini
+csagent --ui --model gpt-4o-mini
 ```
 
 ---
@@ -618,7 +618,7 @@ dotnet run
 
 # Web UI mode
 set ALBERT_API_KEY=your-key
-dotnet run -- --ui
+csagent --ui
 ```
 
 ---
