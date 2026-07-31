@@ -1,4 +1,4 @@
-﻿namespace CsAgentUI;
+namespace CsAgentUI;
 
 public static class StaticAssets
 {
@@ -25,6 +25,8 @@ public static class StaticAssets
         --call:#38bdf8;
         --result:#4ade80;
         --done:#22c55e;
+        --warning:#f59e0b;
+        --danger:#ef4444;
     }
 
     *{
@@ -166,6 +168,18 @@ public static class StaticAssets
         color:var(--result);
     }
 
+    .warning{
+        background:rgba(245,158,11,.08);
+        border-left:4px solid var(--warning);
+        color:var(--warning);
+    }
+
+    .danger{
+        background:rgba(239,68,68,.08);
+        border-left:4px solid var(--danger);
+        color:var(--danger);
+    }
+
     .done{
         text-align:center;
         color:var(--done);
@@ -239,7 +253,7 @@ public static class StaticAssets
     <h2>
     <span class="status-dot"></span>
     CSAgent
-    <span class="version">ENGINE v1.0</span>
+    <span class="version">DUAL v1.0</span>
     </h2>
     </div>
 
@@ -255,7 +269,7 @@ public static class StaticAssets
     <input
     id="in"
     autocomplete="off"
-    placeholder="Ask CSAgent anything..."
+    placeholder="Ask CSAgent anything... (All destructive actions require approval)"
     onkeypress="if(event.key==='Enter')run()">
     </div>
 
@@ -293,6 +307,16 @@ public static class StaticAssets
     div.className="done";
     div.innerText="✓ Task completed successfully";
     stream.close();
+
+    }else if(message.type==="warning"){
+
+    div.className="warning";
+    div.innerText="⚠ " + message.data;
+
+    }else if(message.type==="danger"){
+
+    div.className="danger";
+    div.innerText="✗ " + message.data;
 
     }else{
 

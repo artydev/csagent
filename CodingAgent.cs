@@ -9,7 +9,7 @@ namespace CsAgentUI;
 public sealed record AgentOptions(
     int MaxSteps = 30,
     bool DryRun = false,
-    bool Confirm = false);
+    bool Confirm = true); // Changed default to true for enhanced security
 
 public sealed class CodingAgent : IDisposable
 {
@@ -98,10 +98,11 @@ public sealed class CodingAgent : IDisposable
                 {
                     result = "[dry-run] Tool not executed.";
                 }
-                else if (_opts.Confirm && IsDestructive(funcName))
+                else if (IsDestructive(funcName))
                 {
-                    // Note: UI.Confirm remains a blocking console operation
-                    result = UI.Confirm($"Allow '{funcName}'?")
+                    // Always require confirmation for destructive actions
+                    // Even if _opts.Confirm is false, we enforce it for safety
+                    result = UI.Confirm($"Allow destructive action '{funcName}'?")
                         ? await DispatchAsync(funcName, argsRaw, isWindows)
                         : "Tool call declined by user.";
                 }
@@ -166,6 +167,13 @@ public sealed class CodingAgent : IDisposable
         try
         {
             var full = Path.GetFullPath(path);
+            
+            // Additional safety checks for destructive operations
+            if (!IsSafePath(full))
+            {
+                return $"Error: write_file - Path '{full}' is not allowed for writing. Only files in the current working directory are permitted.";
+            }
+            
             var dir = Path.GetDirectoryName(full);
             if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
             File.WriteAllText(full, content, new UTF8Encoding(false));
@@ -180,6 +188,13 @@ public sealed class CodingAgent : IDisposable
         try
         {
             var full = Path.GetFullPath(path);
+            
+            // Additional safety checks for reading operations
+            if (!IsSafePath(full))
+            {
+                return $"Error: read_file - Path '{full}' is not allowed for reading. Only files in the current working directory are permitted.";
+            }
+            
             if (!File.Exists(full)) return $"Error: not found '{full}'";
             var len = new FileInfo(full).Length;
             if (len > 512_000) return $"Error: file too large ({len / 1024} KB). Use sh to grep/head.";
@@ -194,6 +209,13 @@ public sealed class CodingAgent : IDisposable
         try
         {
             var full = Path.GetFullPath(path);
+            
+            // Additional safety checks for directory operations
+            if (!IsSafePath(full))
+            {
+                return $"Error: list_dir - Path '{full}' is not allowed for listing. Only directories in the current working directory are permitted.";
+            }
+            
             if (!Directory.Exists(full)) return $"Error: directory not found '{full}'";
             var opt = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
             var sb = new StringBuilder();
@@ -211,6 +233,12 @@ public sealed class CodingAgent : IDisposable
     {
         try
         {
+            // Additional safety checks for shell commands
+            if (!IsSafeCommand(cmd))
+            {
+                return $"Error: sh - Command '{cmd}' contains potentially dangerous operations and is not allowed.";
+            }
+            
             var (file, shellArgs) = isWindows
                 ? ("cmd.exe", $"/d /s /c \"{cmd}\"")
                 : ("/bin/sh", $"-c \"{cmd.Replace("\"", "\\\"")}\"");
@@ -250,8 +278,65 @@ public sealed class CodingAgent : IDisposable
         catch (Exception ex) { return $"Shell error: {ex.Message}"; }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── Safety Checks ─────────────────────────────────────────────────────────
     private static bool IsDestructive(string n) => n is "sh" or "write_file";
+
+    // Check if path is safe (only allows files in current working directory)
+    private static bool IsSafePath(string fullPath)
+    {
+        try
+        {
+            var currentDir = Directory.GetCurrentDirectory();
+            var normalizedCurrent = Path.GetFullPath(currentDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var normalizedPath = Path.GetFullPath(fullPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            
+            // Allow only paths that are within the current directory or subdirectories
+            return normalizedPath.StartsWith(normalizedCurrent, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            // If we can't determine safety, be conservative and disallow
+            return false;
+        }
+    }
+
+    // Check if command is potentially dangerous
+    private static bool IsSafeCommand(string cmd)
+    {
+        // Common dangerous patterns that should be blocked
+        var dangerousPatterns = new[]
+        {
+            "rm -rf",           // Dangerous file removal
+            "sudo ",            // Privilege escalation
+            "chmod",            // Permission changes
+            "wget",             // Downloading arbitrary files
+            "curl",             // Downloading arbitrary files
+            "eval ",            // Code execution
+            "exec ",            // Process execution
+            "shutdown",         // System shutdown
+            "reboot",           // System reboot
+            "dd ",              // Low-level disk operations
+            "mkfs",             // File system creation
+            "/etc/",            // System configuration files
+            "/usr/bin/",        // System binaries
+            "/bin/",            // System binaries
+            "&&",               // Command chaining
+            "||",               // Command chaining
+            ";",                // Command separation
+            "|",                // Pipe operations
+        };
+
+        var lowerCmd = cmd.ToLowerInvariant();
+        foreach (var pattern in dangerousPatterns)
+        {
+            if (lowerCmd.Contains(pattern))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     private static string PrettyJson(string raw)
     {
@@ -358,6 +443,9 @@ public sealed class CodingAgent : IDisposable
             - If a command fails, analyse the error and retry with a fix.
             - When the task is fully complete, say exactly "Task complete." and stop.
             - Never silently swallow errors.
+            - ALL DESTRUCTIVE ACTIONS REQUIRE USER APPROVAL
+            - FILE OPERATIONS ARE RESTRICTED TO THE CURRENT WORKING DIRECTORY ONLY
+            - SHELL COMMANDS ARE FILTERED FOR POTENTIALLY DANGEROUS OPERATIONS
             """
     };
 }

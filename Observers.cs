@@ -14,6 +14,8 @@ public class ConsoleObserver : IAgentObserver
     public Task OnToolResult(string r, bool e) { UI.ToolResult(r, e); return Task.CompletedTask; }
     public Task OnDone(string m) { UI.Success(m); return Task.CompletedTask; }
     public Task OnError(string m) { UI.Error(m); return Task.CompletedTask; }
+    public Task OnWarning(string m) { UI.Warning(m); return Task.CompletedTask; }
+    public Task OnDanger(string m) { UI.Danger(m); return Task.CompletedTask; }
     private string Pretty(string r) => JsonNode.Parse(r)?.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) ?? r;
 }
 
@@ -37,6 +39,8 @@ public class SseObserver(HttpResponse res) : IAgentObserver
     public Task OnToolResult(string r, bool e) => Send("result", new SseResult(r, e));
     public Task OnDone(string m) => Send("done", m);
     public Task OnError(string m) => Send("error", m);
+    public Task OnWarning(string m) => Send("warning", m);
+    public Task OnDanger(string m) => Send("danger", m);
 }
 
 // ── AOT Source Generation ──

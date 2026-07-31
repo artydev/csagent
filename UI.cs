@@ -1,4 +1,4 @@
-﻿namespace CsAgentUI;
+namespace CsAgentUI;
 
 public static class UI
 {
@@ -73,6 +73,20 @@ public static class UI
         Console.ResetColor();
     }
 
+    public static void Warning(string msg)
+    {
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.WriteLine($"\n[WARN] {msg}");
+        Console.ResetColor();
+    }
+
+    public static void Danger(string msg)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.Error.WriteLine($"\n[DANGER] {msg}");
+        Console.ResetColor();
+    }
+
     public static void Info(string msg)
     {
         Console.ForegroundColor = ConsoleColor.DarkCyan;
@@ -105,4 +119,4 @@ public static class UI
         Console.WriteLine();
         return sb.ToString();
     }
-}
+}
