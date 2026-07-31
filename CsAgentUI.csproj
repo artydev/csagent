@@ -15,6 +15,10 @@
 		<InvariantGlobalization>true</InvariantGlobalization>
 	</PropertyGroup>
 
+	<ItemGroup>
+	  <Folder Include="wwwroot\documentation\" />
+	</ItemGroup>
+
 	<!-- No other PropertyGroups needed at the root level -->
 
 </Project>

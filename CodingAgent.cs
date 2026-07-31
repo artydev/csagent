@@ -234,7 +234,7 @@ public sealed class CodingAgent : IDisposable
         try
         {
             // Additional safety checks for shell commands
-            if (!IsSafeCommand(cmd))
+            if (!IsSafeCommand(cmd, isWindows))
             {
                 return $"Error: sh - Command '{cmd}' contains potentially dangerous operations and is not allowed.";
             }
@@ -279,7 +279,7 @@ public sealed class CodingAgent : IDisposable
     }
 
     // ── Safety Checks ─────────────────────────────────────────────────────────
-    private static bool IsDestructive(string n) => n is "sh" or "write_file";
+    private static bool IsDestructive(string n) => n is "write_file";
 
     // Check if path is safe (only allows files in current working directory)
     private static bool IsSafePath(string fullPath)
@@ -300,38 +300,74 @@ public sealed class CodingAgent : IDisposable
         }
     }
 
-    // Check if command is potentially dangerous
-    private static bool IsSafeCommand(string cmd)
+    // Check if command is potentially dangerous (platform-aware)
+    private static bool IsSafeCommand(string cmd, bool isWindows)
     {
-        // Common dangerous patterns that should be blocked
-        var dangerousPatterns = new[]
-        {
-            "rm -rf",           // Dangerous file removal
-            "sudo ",            // Privilege escalation
-            "chmod",            // Permission changes
-            "wget",             // Downloading arbitrary files
-            "curl",             // Downloading arbitrary files
-            "eval ",            // Code execution
-            "exec ",            // Process execution
-            "shutdown",         // System shutdown
-            "reboot",           // System reboot
-            "dd ",              // Low-level disk operations
-            "mkfs",             // File system creation
-            "/etc/",            // System configuration files
-            "/usr/bin/",        // System binaries
-            "/bin/",            // System binaries
-            "&&",               // Command chaining
-            "||",               // Command chaining
-            ";",                // Command separation
-            "|",                // Pipe operations
-        };
-
         var lowerCmd = cmd.ToLowerInvariant();
-        foreach (var pattern in dangerousPatterns)
+
+        if (isWindows)
         {
-            if (lowerCmd.Contains(pattern))
+            // Windows-specific dangerous patterns
+            var windowsDangerous = new[]
             {
-                return false;
+                "format ",          // Format drive
+                "format.",          // Format drive (with dot)
+                "del /f",           // Force delete files
+                "del /s",           // Recursive delete
+                "rd /s",            // Force remove directory tree
+                "rmdir /s",         // Force remove directory tree
+                "reg delete",       // Registry manipulation
+                "reg add",          // Registry manipulation
+                "reg import",       // Registry import
+                "net user",         // User management
+                "net localgroup",   // Group management
+                "net share",        // Share management
+                "net use",          // Network drive mapping
+                "takeown",          // Take ownership
+                "icacls",           // Permission changes
+                "cacls",            // Permission changes
+                "attrib -r -s -h",  // Remove read-only/system/hidden attributes (often used by malware)
+                "bcdedit",          // Boot configuration
+                "diskpart",         // Disk partitioning
+                "powershell start-process -verb runas", // Privilege escalation via PowerShell
+                "runas",            // Run as different user
+                "shutdown",         // System shutdown
+                "reboot",           // System reboot
+                "\\windows\\system32\\", // System directory (case-insensitive match via lowercase)
+                "\\windows\\system\\",   // System directory
+                "\\program files\\",     // Program Files (shouldn't write there)
+            };
+
+            foreach (var pattern in windowsDangerous)
+            {
+                if (lowerCmd.Contains(pattern))
+                {
+                    return false;
+                }
+            }
+        }
+        else
+        {
+            // Unix-specific dangerous patterns
+            var unixDangerous = new[]
+            {
+                "sudo ",            // Privilege escalation
+                "chmod",            // Permission changes
+                "shutdown",         // System shutdown
+                "reboot",           // System reboot
+                "dd ",              // Low-level disk operations
+                "mkfs",             // File system creation
+                "/etc/",            // System configuration files
+                "/usr/bin/",        // System binaries
+                "/bin/",            // System binaries
+            };
+
+            foreach (var pattern in unixDangerous)
+            {
+                if (lowerCmd.Contains(pattern))
+                {
+                    return false;
+                }
             }
         }
 
