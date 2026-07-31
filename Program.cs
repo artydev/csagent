@@ -1,7 +1,6 @@
 using CsAgentUI;
 using CsAgentUI.Endpoints;
 using System.Diagnostics;
-using System.Reflection;
 using System.Text.Json.Nodes;
 
 const string Version = "0.2.0";
@@ -23,7 +22,8 @@ builder.Logging.SetMinimumLevel(LogLevel.Critical);
 
 var isUiMode = args.Contains("--ui");
 
-// Helper to find memory file from args
+// ── Argument helpers ────────────────────────────────────────────────────────
+
 static string GetMemoryFile(string[] args)
 {
     for (int i = 0; i < args.Length; i++)
@@ -35,48 +35,68 @@ static string GetMemoryFile(string[] args)
     return "agent_memory.json";
 }
 
-var memFile = GetMemoryFile(args);
+static string? GetModelOverride(string[] args)
+{
+    for (int i = 0; i < args.Length; i++)
+        if (args[i] == "--model" && i + 1 < args.Length) return args[i + 1];
+    return null;
+}
 
-// ── UI Mode (Web Server) ──
+var memFile = GetMemoryFile(args);
+var modelOverride = GetModelOverride(args);
+
+// ── Web UI Mode ─────────────────────────────────────────────────────────────
+
 if (isUiMode)
 {
     var app = builder.Build();
 
-    // Serve the UI from the embedded string (AOT-safe)
     app.MapGet("/", () => Results.Content(StaticAssets.HtmlUI, "text/html"));
+    app.MapEndpoints(memFile, modelOverride);
 
-    // Map API endpoints
-    app.MapEndpoints(memFile);
-
-    // Register browser launch after server starts
     app.Lifetime.ApplicationStarted.Register(() =>
     {
         Console.WriteLine("\n--- Server started at http://localhost:5050 ---");
         try
         {
-            // Attempt to open the default browser
             Process.Start(new ProcessStartInfo("http://localhost:5050") { UseShellExecute = true });
         }
-        catch { /* Fail silently if browser cannot be launched */ }
+        catch { }
     });
 
     app.Run("http://localhost:5050");
 }
 
-// ── CLI Mode ──
+// ── CLI Mode ────────────────────────────────────────────────────────────────
+
 else
 {
     UI.Banner();
     Console.WriteLine($"  CSAgent v{Version}");
     Console.WriteLine();
+
     var apiKey = Environment.GetEnvironmentVariable("ALBERT_API_KEY") ?? "";
-    if (string.IsNullOrEmpty(apiKey)) { Console.WriteLine("Error: ALBERT_API_KEY env var not set."); return; }
+    if (string.IsNullOrEmpty(apiKey))
+    {
+        Console.WriteLine("Error: ALBERT_API_KEY env var not set.");
+        return;
+    }
 
     var messages = await MemoryStore.LoadAsync(memFile);
-    if (messages.Count == 0) messages.Add(CodingAgent.SystemMessage(OperatingSystem.IsWindows()));
+    if (messages.Count == 0)
+        messages.Add(CodingAgent.SystemMessage(OperatingSystem.IsWindows()));
 
-    // Default to confirm mode for enhanced security (this is now the default in AgentOptions)
-    using var agent = new CodingAgent(apiKey, "https://albert.api.etalab.gouv.fr/v1", "deepseek-v4-flash", new AgentOptions(Confirm: true), new ConsoleObserver());
+    // Use unified model from LlmSettings, with optional override
+    var model = modelOverride ?? LlmSettings.Model;
+    Console.WriteLine($"  Model: {model}");
+    Console.WriteLine();
+
+    using var agent = new CodingAgent(
+        apiKey,
+        LlmSettings.Endpoint,
+        model,
+        new AgentOptions(Confirm: true),
+        new ConsoleObserver());
 
     while (true)
     {
@@ -90,50 +110,20 @@ else
     }
 }
 
-// ── Documentation Display ──
+// ── Documentation Display ───────────────────────────────────────────────────
 
 static void ShowDocumentation()
 {
-    var assembly = Assembly.GetExecutingAssembly();
+    var lines = StaticAssets.ReadmeMd.Split(["\r\n", "\n", "\r"], StringSplitOptions.None);
 
-    // Find the embedded resource matching README.md regardless of namespace prefix
-    var resourceName = assembly.GetManifestResourceNames()
-        .FirstOrDefault(r => r.EndsWith("README.md", StringComparison.OrdinalIgnoreCase));
-
-    if (string.IsNullOrEmpty(resourceName))
-    {
-        Console.Error.WriteLine("Error: README.md embedded resource not found.");
-        return;
-    }
-
-    using var stream = assembly.GetManifestResourceStream(resourceName);
-    if (stream == null)
-    {
-        Console.Error.WriteLine("Error: Could not read embedded README.md stream.");
-        return;
-    }
-
-    using var reader = new StreamReader(stream);
-    var lines = new List<string>();
-    string? fileLine;
-    while ((fileLine = reader.ReadLine()) != null)
-    {
-        lines.Add(fileLine);
-    }
-
-    // Determine terminal width safely
     var termWidth = 80;
     try
     {
         if (!Console.IsOutputRedirected)
             termWidth = Console.WindowWidth;
     }
-    catch
-    {
-        // Fall back to default width
-    }
+    catch { }
 
-    // Detect if terminal supports ANSI colors
     var useColor = !Console.IsOutputRedirected
                   && (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TERM"))
                       || OperatingSystem.IsLinux()
@@ -143,7 +133,6 @@ static void ShowDocumentation()
     {
         var trimmed = line.Trim();
 
-        // ── H1: Title ──
         if (trimmed.StartsWith("# ") && !trimmed.StartsWith("##"))
         {
             var title = trimmed[2..].Trim();
@@ -166,7 +155,6 @@ static void ShowDocumentation()
             continue;
         }
 
-        // ── H2: Section ──
         if (trimmed.StartsWith("## ") && !trimmed.StartsWith("###"))
         {
             var section = trimmed[3..].Trim();
@@ -184,7 +172,6 @@ static void ShowDocumentation()
             continue;
         }
 
-        // ── H3: Sub-section ──
         if (trimmed.StartsWith("### "))
         {
             var sub = trimmed[4..].Trim();
@@ -201,7 +188,6 @@ static void ShowDocumentation()
             continue;
         }
 
-        // ── Horizontal rule ──
         if (trimmed == "---")
         {
             var hr = new string('─', Math.Min(60, termWidth - 1));
@@ -219,7 +205,6 @@ static void ShowDocumentation()
             continue;
         }
 
-        // ── Unordered list item ──
         if (trimmed.StartsWith("- "))
         {
             var item = trimmed[2..].Trim();
@@ -249,7 +234,6 @@ static void ShowDocumentation()
             continue;
         }
 
-        // ── Numbered list item ──
         if (trimmed.Length > 2 && char.IsDigit(trimmed[0]) && trimmed[1] == '.')
         {
             var idx = trimmed.IndexOf(' ');
@@ -269,7 +253,6 @@ static void ShowDocumentation()
             continue;
         }
 
-        // ── Inline code (backtick) ──
         if (trimmed.StartsWith("`") && trimmed.EndsWith("`") && !trimmed.Contains(' '))
         {
             var code = trimmed.Trim('`');
@@ -286,13 +269,9 @@ static void ShowDocumentation()
             continue;
         }
 
-        // ── Code block markers ──
         if (trimmed.StartsWith("```"))
-        {
             continue;
-        }
 
-        // ── Table row ──
         if (trimmed.StartsWith("|") && trimmed.EndsWith("|"))
         {
             var cells = trimmed.Split('|', StringSplitOptions.RemoveEmptyEntries);
@@ -327,7 +306,6 @@ static void ShowDocumentation()
             continue;
         }
 
-        // ── Bold line (surrounded by **) ──
         if (trimmed.StartsWith("**") && trimmed.EndsWith("**") && trimmed.Length > 4)
         {
             var boldText = trimmed.Trim('*');
@@ -344,7 +322,6 @@ static void ShowDocumentation()
             continue;
         }
 
-        // ── Regular paragraph ──
         if (!string.IsNullOrWhiteSpace(trimmed))
         {
             if (useColor && trimmed.Contains("**"))
@@ -372,15 +349,12 @@ static void ShowDocumentation()
             continue;
         }
 
-        // ── Empty line ──
         Console.WriteLine();
     }
 
     Console.WriteLine();
 }
 
-
-// Helper to split text by **bold** markers
 static List<(string text, bool isBold)> SplitBold(string input)
 {
     var result = new List<(string, bool)>();
@@ -395,9 +369,7 @@ static List<(string text, bool isBold)> SplitBold(string input)
         }
 
         if (boldStart > 0)
-        {
             result.Add((remaining[..boldStart], false));
-        }
 
         var boldEnd = remaining.IndexOf("**", boldStart + 2, StringComparison.Ordinal);
         if (boldEnd < 0)

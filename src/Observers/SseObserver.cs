@@ -1,32 +1,16 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Http;
 
 namespace CsAgentUI;
 
-// ── Console Observer ──
-public class ConsoleObserver : IAgentObserver
-{
-    public Task OnStep(int n, int m) { UI.Step(n, m); return Task.CompletedTask; }
-    public Task OnThought(string t) { UI.AssistantText(t); return Task.CompletedTask; }
-    public Task OnToolCall(string n, string a) { UI.ToolCall(n, Pretty(a)); return Task.CompletedTask; }
-    public Task OnToolResult(string r, bool e) { UI.ToolResult(r, e); return Task.CompletedTask; }
-    public Task OnDone(string m) { UI.Success(m); return Task.CompletedTask; }
-    public Task OnError(string m) { UI.Error(m); return Task.CompletedTask; }
-    public Task OnWarning(string m) { UI.Warning(m); return Task.CompletedTask; }
-    public Task OnDanger(string m) { UI.Danger(m); return Task.CompletedTask; }
-    private string Pretty(string r) => JsonNode.Parse(r)?.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) ?? r;
-}
-
-// ── Web SSE Observer ──
 public class SseObserver(HttpResponse res) : IAgentObserver
 {
     private static int _msgId = 0;
 
     private async Task Send(string type, object data)
     {
-        var id = System.Threading.Interlocked.Increment(ref _msgId);
+        var id = Interlocked.Increment(ref _msgId);
         var payload = new SseMessage(id, type, data);
         var json = JsonSerializer.Serialize(payload, WebJsonContext.Default.SseMessage);
         await res.WriteAsync($"data: {json}\n\n");
@@ -43,7 +27,8 @@ public class SseObserver(HttpResponse res) : IAgentObserver
     public Task OnDanger(string m) => Send("danger", m);
 }
 
-// ── AOT Source Generation ──
+// ── SSE message types ──
+
 public record SseMessage(int id, string type, object data);
 public record SseStep(int n, int m);
 public record SseCall(string n, string a);

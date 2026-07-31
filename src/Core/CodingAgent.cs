@@ -1,4 +1,3 @@
-using CsAgentUI;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -6,17 +5,13 @@ using System.Text.Json.Nodes;
 
 namespace CsAgentUI;
 
-public sealed record AgentOptions(
-    int MaxSteps = 30,
-    bool DryRun = false,
-    bool Confirm = true); // Changed default to true for enhanced security
-
 public sealed class CodingAgent : IDisposable
 {
     private readonly LlmClient _client;
     private readonly AgentOptions _opts;
     private readonly IAgentObserver _observer;
     private CancellationTokenSource? _cts;
+
     private const int ShellTimeoutMs = 60_000;
     private const int TrimThresholdChars = 96_000;
 
@@ -26,6 +21,8 @@ public sealed class CodingAgent : IDisposable
         _observer = observer;
         _client = new LlmClient(apiKey, endpoint, model);
     }
+
+    // ── Main loop ────────────────────────────────────────────────────────────
 
     public async Task RunAsync(JsonArray messages, string memoryFile)
     {
@@ -57,12 +54,10 @@ public sealed class CodingAgent : IDisposable
                 return;
             }
 
-            // Print assistant text
             var text = message["content"]?.GetValue<string>();
             if (!string.IsNullOrWhiteSpace(text))
                 await _observer.OnThought(text);
 
-            // Add assistant turn to history
             messages.Add(message.DeepClone());
 
             var finishReason = choice?["finish_reason"]?.GetValue<string>();
@@ -76,12 +71,10 @@ public sealed class CodingAgent : IDisposable
                     await MemoryStore.SaveAsync(memoryFile, messages);
                     return;
                 }
-
                 await _observer.OnDone("Assistant finished.");
                 return;
             }
 
-            // Execute each tool call
             foreach (var tc in toolCalls)
             {
                 if (tc is null) continue;
@@ -100,8 +93,6 @@ public sealed class CodingAgent : IDisposable
                 }
                 else if (IsDestructive(funcName))
                 {
-                    // Always require confirmation for destructive actions
-                    // Even if _opts.Confirm is false, we enforce it for safety
                     result = UI.Confirm($"Allow destructive action '{funcName}'?")
                         ? await DispatchAsync(funcName, argsRaw, isWindows)
                         : "Tool call declined by user.";
@@ -130,6 +121,8 @@ public sealed class CodingAgent : IDisposable
 
         await _observer.OnError($"Reached maximum of {_opts.MaxSteps} steps without completing.");
     }
+
+    // ── Tool dispatch ────────────────────────────────────────────────────────
 
     private async Task<string> DispatchAsync(string name, string argsJson, bool isWindows)
     {
@@ -161,19 +154,16 @@ public sealed class CodingAgent : IDisposable
         }
     }
 
-    // ── write_file ────────────────────────────────────────────────────────────
+    // ── write_file ───────────────────────────────────────────────────────────
+
     private static string WriteFile(string path, string content)
     {
         try
         {
             var full = Path.GetFullPath(path);
-            
-            // Additional safety checks for destructive operations
             if (!IsSafePath(full))
-            {
                 return $"Error: write_file - Path '{full}' is not allowed for writing. Only files in the current working directory are permitted.";
-            }
-            
+
             var dir = Path.GetDirectoryName(full);
             if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
             File.WriteAllText(full, content, new UTF8Encoding(false));
@@ -182,19 +172,16 @@ public sealed class CodingAgent : IDisposable
         catch (Exception ex) { return $"Error: write_file — {ex.Message}"; }
     }
 
-    // ── read_file ─────────────────────────────────────────────────────────────
+    // ── read_file ────────────────────────────────────────────────────────────
+
     private static string ReadFile(string path)
     {
         try
         {
             var full = Path.GetFullPath(path);
-            
-            // Additional safety checks for reading operations
             if (!IsSafePath(full))
-            {
                 return $"Error: read_file - Path '{full}' is not allowed for reading. Only files in the current working directory are permitted.";
-            }
-            
+
             if (!File.Exists(full)) return $"Error: not found '{full}'";
             var len = new FileInfo(full).Length;
             if (len > 512_000) return $"Error: file too large ({len / 1024} KB). Use sh to grep/head.";
@@ -203,42 +190,52 @@ public sealed class CodingAgent : IDisposable
         catch (Exception ex) { return $"Error: read_file — {ex.Message}"; }
     }
 
-    // ── list_dir ──────────────────────────────────────────────────────────────
+    // ── list_dir ─────────────────────────────────────────────────────────────
+
     private static string ListDir(string path, bool recursive)
     {
         try
         {
             var full = Path.GetFullPath(path);
-            
-            // Additional safety checks for directory operations
             if (!IsSafePath(full))
-            {
                 return $"Error: list_dir - Path '{full}' is not allowed for listing. Only directories in the current working directory are permitted.";
-            }
-            
+
             if (!Directory.Exists(full)) return $"Error: directory not found '{full}'";
+
             var opt = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
             var sb = new StringBuilder();
+
             foreach (var d in Directory.EnumerateDirectories(full, "*", opt))
+            {
+                // Skip hidden directories (starting with '.')
+                var dirName = Path.GetFileName(d);
+                if (dirName.StartsWith(".")) continue;
                 sb.AppendLine($"[DIR]  {Path.GetRelativePath(full, d)}/");
+            }
+
             foreach (var f in Directory.EnumerateFiles(full, "*", opt))
-                sb.AppendLine($"[FILE] {Path.GetRelativePath(full, f)}  ({Sz(new FileInfo(f).Length)})");
+            {
+                // Skip files in hidden directories
+                var relPath = Path.GetRelativePath(full, f);
+                if (relPath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(p => p.StartsWith(".")))
+                    continue;
+                sb.AppendLine($"[FILE] {relPath}  ({Sz(new FileInfo(f).Length)})");
+            }
+
             return sb.Length == 0 ? "(empty)" : sb.ToString().TrimEnd();
         }
         catch (Exception ex) { return $"Error: list_dir — {ex.Message}"; }
     }
 
-    // ── sh ────────────────────────────────────────────────────────────────────
+    // ── sh ───────────────────────────────────────────────────────────────────
+
     private static async Task<string> RunShellAsync(string cmd, bool isWindows)
     {
         try
         {
-            // Additional safety checks for shell commands
             if (!IsSafeCommand(cmd, isWindows))
-            {
                 return $"Error: sh - Command '{cmd}' contains potentially dangerous operations and is not allowed.";
-            }
-            
+
             var (file, shellArgs) = isWindows
                 ? ("cmd.exe", $"/d /s /c \"{cmd}\"")
                 : ("/bin/sh", $"-c \"{cmd.Replace("\"", "\\\"")}\"");
@@ -265,7 +262,7 @@ public sealed class CodingAgent : IDisposable
 
             if (await Task.WhenAny(waitTask, Task.Delay(ShellTimeoutMs)) != waitTask)
             {
-                try { proc.Kill(entireProcessTree: true); } catch { /* ignore */ }
+                try { proc.Kill(entireProcessTree: true); } catch { }
                 return "Error: command timed out (60s).";
             }
 
@@ -278,10 +275,10 @@ public sealed class CodingAgent : IDisposable
         catch (Exception ex) { return $"Shell error: {ex.Message}"; }
     }
 
-    // ── Safety Checks ─────────────────────────────────────────────────────────
+    // ── Safety checks ────────────────────────────────────────────────────────
+
     private static bool IsDestructive(string n) => n is "write_file";
 
-    // Check if path is safe (only allows files in current working directory)
     private static bool IsSafePath(string fullPath)
     {
         try
@@ -289,90 +286,49 @@ public sealed class CodingAgent : IDisposable
             var currentDir = Directory.GetCurrentDirectory();
             var normalizedCurrent = Path.GetFullPath(currentDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var normalizedPath = Path.GetFullPath(fullPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            
-            // Allow only paths that are within the current directory or subdirectories
             return normalizedPath.StartsWith(normalizedCurrent, StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
-            // If we can't determine safety, be conservative and disallow
             return false;
         }
     }
 
-    // Check if command is potentially dangerous (platform-aware)
     private static bool IsSafeCommand(string cmd, bool isWindows)
     {
         var lowerCmd = cmd.ToLowerInvariant();
 
         if (isWindows)
         {
-            // Windows-specific dangerous patterns
             var windowsDangerous = new[]
             {
-                "format ",          // Format drive
-                "format.",          // Format drive (with dot)
-                "del /f",           // Force delete files
-                "del /s",           // Recursive delete
-                "rd /s",            // Force remove directory tree
-                "rmdir /s",         // Force remove directory tree
-                "reg delete",       // Registry manipulation
-                "reg add",          // Registry manipulation
-                "reg import",       // Registry import
-                "net user",         // User management
-                "net localgroup",   // Group management
-                "net share",        // Share management
-                "net use",          // Network drive mapping
-                "takeown",          // Take ownership
-                "icacls",           // Permission changes
-                "cacls",            // Permission changes
-                "attrib -r -s -h",  // Remove read-only/system/hidden attributes (often used by malware)
-                "bcdedit",          // Boot configuration
-                "diskpart",         // Disk partitioning
-                "powershell start-process -verb runas", // Privilege escalation via PowerShell
-                "runas",            // Run as different user
-                "shutdown",         // System shutdown
-                "reboot",           // System reboot
-                "\\windows\\system32\\", // System directory (case-insensitive match via lowercase)
-                "\\windows\\system\\",   // System directory
-                "\\program files\\",     // Program Files (shouldn't write there)
+                "format ", "format.", "del /f", "del /s", "rd /s", "rmdir /s",
+                "reg delete", "reg add", "reg import",
+                "net user", "net localgroup", "net share", "net use",
+                "takeown", "icacls", "cacls",
+                "attrib -r -s -h", "bcdedit", "diskpart",
+                "powershell start-process -verb runas", "runas",
+                "shutdown", "reboot",
+                "\\windows\\system32\\", "\\windows\\system\\", "\\program files\\",
             };
-
             foreach (var pattern in windowsDangerous)
-            {
-                if (lowerCmd.Contains(pattern))
-                {
-                    return false;
-                }
-            }
+                if (lowerCmd.Contains(pattern)) return false;
         }
         else
         {
-            // Unix-specific dangerous patterns
             var unixDangerous = new[]
             {
-                "sudo ",            // Privilege escalation
-                "chmod",            // Permission changes
-                "shutdown",         // System shutdown
-                "reboot",           // System reboot
-                "dd ",              // Low-level disk operations
-                "mkfs",             // File system creation
-                "/etc/",            // System configuration files
-                "/usr/bin/",        // System binaries
-                "/bin/",            // System binaries
+                "sudo ", "chmod", "shutdown", "reboot", "dd ", "mkfs",
+                "/etc/", "/usr/bin/", "/bin/",
             };
-
             foreach (var pattern in unixDangerous)
-            {
-                if (lowerCmd.Contains(pattern))
-                {
-                    return false;
-                }
-            }
+                if (lowerCmd.Contains(pattern)) return false;
         }
 
         return true;
     }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private static string PrettyJson(string raw)
     {
@@ -400,6 +356,8 @@ public sealed class CodingAgent : IDisposable
 
     public void Dispose() => _client.Dispose();
     public void Cancel() => _cts?.Cancel();
+
+    // ── Tool definitions ─────────────────────────────────────────────────────
 
     private static readonly JsonArray Tools = JsonNode.Parse("""
         [
@@ -463,6 +421,8 @@ public sealed class CodingAgent : IDisposable
           }
         ]
         """)!.AsArray();
+
+    // ── System message ───────────────────────────────────────────────────────
 
     public static JsonObject SystemMessage(bool isWindows) => new()
     {

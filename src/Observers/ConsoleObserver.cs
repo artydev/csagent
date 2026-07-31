@@ -1,0 +1,22 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
+namespace CsAgentUI;
+
+public class ConsoleObserver : IAgentObserver
+{
+    public Task OnStep(int n, int m) { UI.Step(n, m); return Task.CompletedTask; }
+    public Task OnThought(string t) { UI.AssistantText(t); return Task.CompletedTask; }
+    public Task OnToolCall(string n, string a) { UI.ToolCall(n, Pretty(a)); return Task.CompletedTask; }
+    public Task OnToolResult(string r, bool e) { UI.ToolResult(r, e); return Task.CompletedTask; }
+    public Task OnDone(string m) { UI.Success(m); return Task.CompletedTask; }
+    public Task OnError(string m) { UI.Error(m); return Task.CompletedTask; }
+    public Task OnWarning(string m) { UI.Warning(m); return Task.CompletedTask; }
+    public Task OnDanger(string m) { UI.Danger(m); return Task.CompletedTask; }
+
+    private string Pretty(string r)
+    {
+        try { return JsonNode.Parse(r)?.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) ?? r; }
+        catch { return r; }
+    }
+}

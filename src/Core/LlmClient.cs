@@ -4,9 +4,6 @@ using System.Text.Json.Nodes;
 
 namespace CsAgentUI;
 
-/// <summary>
-/// Minimal OpenAI-compatible HTTP client. Zero NuGet dependencies.
-/// </summary>
 public sealed class LlmClient : IDisposable
 {
     private readonly HttpClient _http;

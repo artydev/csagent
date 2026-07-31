@@ -218,7 +218,6 @@ public static class StaticAssets
         box-shadow:0 0 0 4px var(--primary-glow);
     }
 
-    /* Code block styling for syntax highlighting */
     .result pre {
         background: rgba(0, 0, 0, 0.25);
         border-radius: 8px;
@@ -300,11 +299,8 @@ public static class StaticAssets
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
 
     <script>
-    // Initialize Prism with explicit component loading for better reliability
     document.addEventListener('DOMContentLoaded', function() {
-        // Ensure Prism is loaded and ready
         if (typeof Prism !== 'undefined') {
-            // Load common languages explicitly to avoid autoloader issues
             Prism.plugins.autoloader.languages_path = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/';
         }
     });
@@ -312,25 +308,21 @@ public static class StaticAssets
     function run(){
         const input=document.getElementById("in");
         const prompt=input.value.trim();
-
         if(!prompt)return;
 
         const log=document.getElementById("log");
-
         const user=document.createElement("div");
         user.className="user-msg";
         user.innerHTML=`<strong>> User:</strong> ${prompt}`;
         log.appendChild(user);
-
         input.value="";
 
         const stream=new EventSource(
-        `/api/chat?prompt=${encodeURIComponent(prompt)}`
+            `/api/chat?prompt=${encodeURIComponent(prompt)}`
         );
 
         stream.onmessage=function(event){
             const message=JSON.parse(event.data);
-
             const div=document.createElement("div");
 
             if(message.type==="done"){
@@ -345,40 +337,30 @@ public static class StaticAssets
                 div.innerText="✗ " + message.data;
             }else{
                 div.className=message.type;
+                const content=typeof message.data==="string"
+                    ?message.data
+                    :JSON.stringify(message.data,null,2);
 
-                const content=
-                typeof message.data==="string"
-                ?message.data
-                :JSON.stringify(message.data,null,2);
-
-                // For result messages, we'll wrap content in pre/code tags for syntax highlighting
                 if(message.type === "result") {
-                    // Create a pre element with appropriate class for Prism.js to highlight
                     const preElement = document.createElement('pre');
                     const codeElement = document.createElement('code');
-                    codeElement.className = 'language-javascript'; // Default to JavaScript
+                    codeElement.className = 'language-javascript';
                     codeElement.textContent = content;
                     preElement.appendChild(codeElement);
                     div.appendChild(preElement);
                 } else {
                     div.innerText=`[${message.type}] ${content}`;
                 }
-
                 log.appendChild(div);
-                
-                // After adding content, trigger syntax highlighting for the new content
+
                 if(message.type === "result") {
-                    // Use setTimeout to ensure DOM is updated before highlighting
                     setTimeout(function() {
                         try {
                             if (typeof Prism !== 'undefined' && Prism.highlightAllUnder) {
-                                // Highlight only within the newly added div
                                 Prism.highlightAllUnder(div);
                             }
-                        } catch(e) {
-                            console.error('Highlighting error:', e);
-                        }
-                    }, 10); // Small delay to ensure DOM update
+                        } catch(e) { console.error('Highlighting error:', e); }
+                    }, 10);
                 }
             }
         };
@@ -392,4 +374,301 @@ public static class StaticAssets
     </body>
     </html>
     """;
+
+    public const string ReadmeMd = """
+# CSAgent — Cross-Platform Autonomous Coding Agent
+
+**CSAgent** is a zero-NuGet-dependency autonomous coding agent that runs on Windows, Linux, and macOS. It uses an OpenAI-compatible API (e.g., [Albert API](https://albert.api.etalab.gouv.fr)) to understand natural-language instructions and autonomously perform coding tasks by reading, writing, and listing files, as well as executing shell commands.
+
+---
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Modes of Operation](#modes-of-operation)
+  - [CLI Mode (Default)](#cli-mode-default)
+  - [Web UI Mode](#web-ui-mode)
+- [LLM Models](#llm-models)
+- [Environment Variables](#environment-variables)
+- [Command-Line Arguments](#command-line-arguments)
+- [Safety Features](#safety-features)
+- [Available Tools](#available-tools)
+- [Memory & Conversation Persistence](#memory--conversation-persistence)
+- [Building from Source](#building-from-source)
+- [AOT Publishing](#aot-publishing)
+- [Troubleshooting](#troubleshooting)
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- .NET 10.0 SDK or later (for building from source)
+- An API key for an OpenAI-compatible endpoint (e.g., [Albert API](https://albert.api.etalab.gouv.fr))
+
+### Run with the Web UI
+
+```bash
+# Set your API key
+set ALBERT_API_KEY=your-api-key-here
+
+# Run the web server
+dotnet run -- --ui
+```
+
+Then open your browser to **http://localhost:5050**.
+
+### Run in CLI Mode
+
+```bash
+set ALBERT_API_KEY=your-api-key-here
+dotnet run
+```
+
+---
+
+## Modes of Operation
+
+### CLI Mode (Default)
+
+In CLI mode, CSAgent presents a text-based interactive session. You type instructions, and the agent autonomously works through them step by step.
+
+```
+> User: Create a new C# console project that prints "Hello, World!"
+```
+
+The agent will:
+1. Think about the task
+2. Execute tools (write files, run shell commands)
+3. Report results
+4. Continue until the task is complete
+
+Type `exit` to quit the session.
+
+### Web UI Mode
+
+In Web UI mode (`--ui` flag), CSAgent starts a local web server with a modern, dark-themed interface featuring:
+
+- Real-time streaming of agent thoughts, tool calls, and results via Server-Sent Events (SSE)
+- Syntax highlighting for code blocks (via Prism.js)
+- Responsive design for desktop and mobile
+- A clean, terminal-inspired aesthetic
+
+The web UI is served at **http://localhost:5050**.
+
+---
+
+## LLM Models
+
+CSAgent uses a **single unified model** for both CLI and Web UI modes. The default model is `deepseek-v4-flash`, defined in `LlmSettings.cs`. This means both modes behave identically in terms of LLM behaviour — there is no longer a separate model per mode.
+
+You can override the model in either mode using the `--model` argument (see [Command-Line Arguments](#command-line-arguments)).
+
+### Examples
+
+```bash
+# CLI mode with a different model
+dotnet run -- --model gpt-4o
+
+# Web UI mode with a different model
+dotnet run -- --ui --model gpt-4o
+```
+
+---
+
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `ALBERT_API_KEY` | Yes | Your API key for the OpenAI-compatible endpoint |
+
+---
+
+## Command-Line Arguments
+
+| Argument | Description |
+|---|---|
+| `--ui` | Start in Web UI mode (starts a web server) |
+| `--mem <file>` | Specify a custom memory/conversation file (default: `agent_memory.json`) |
+| `--model <model>` | Override the default LLM model for the current mode |
+| `--dry-run` | Simulate tool execution without making changes |
+| `--version` | Display the current version of CSAgent and exit |
+| `--doc` | Display this documentation in a nicely formatted terminal view and exit |
+| `<file>` | Positional argument: specify a memory file without `--mem` flag |
+
+### Examples
+
+```bash
+# Web UI with custom memory file
+dotnet run -- --ui --mem my_project_memory.json
+
+# CLI mode with a specific memory file
+dotnet run my_memory.json
+
+# Dry run mode
+dotnet run -- --dry-run
+
+# Display version
+dotnet run -- --version
+
+# Display documentation in terminal
+dotnet run -- --doc
+
+# Override the LLM model in CLI mode
+dotnet run -- --model gpt-4o-mini
+
+# Override the LLM model in Web UI mode
+dotnet run -- --ui --model gpt-4o-mini
+```
+
+---
+
+## Safety Features
+
+CSAgent includes multiple layers of safety to prevent accidental damage to your system:
+
+### 1. Destructive Action Confirmation
+
+The `write_file` tool is classified as **destructive** because it modifies files on disk. Before executing, the agent will prompt for confirmation:
+
+```
+[?] Allow destructive action 'write_file'? [Y/n]
+```
+
+### 2. Path Restriction
+
+File operations (`write_file`, `read_file`, `list_dir`) are **restricted to the current working directory** and its subdirectories. Attempts to access files outside this scope are blocked.
+
+### 3. Dangerous Command Filtering
+
+Shell commands are scanned for potentially dangerous patterns before execution. The filter is **platform-aware** and blocks operations like formatting drives, registry manipulation, privilege escalation, and system shutdown.
+
+### 4. Command Timeout
+
+All shell commands have a **60-second timeout**. If a command takes longer, it is automatically killed.
+
+### 5. File Size Limit
+
+Reading files larger than **500 KB** is blocked to prevent memory issues.
+
+---
+
+## Available Tools
+
+The agent has access to four tools:
+
+### `write_file`
+Write (or overwrite) a text file. Parent directories are created automatically.
+
+**Parameters:**
+- `path` (string, required) — File path
+- `content` (string, required) — UTF-8 content to write
+
+### `read_file`
+Read a text file and return its content.
+
+**Parameters:**
+- `path` (string, required) — File path
+
+### `list_dir`
+List files and subdirectories in a directory.
+
+**Parameters:**
+- `path` (string, optional, default: `.`) — Directory to list
+- `recursive` (boolean, optional, default: `false`) — Whether to list recursively
+
+### `sh`
+Execute a shell command. Uses `cmd.exe` on Windows, `/bin/sh` elsewhere.
+
+**Parameters:**
+- `cmd` (string, required) — Shell command to run
+
+---
+
+## Memory & Conversation Persistence
+
+CSAgent saves the conversation history to a JSON file (default: `agent_memory.json`). This allows the agent to maintain context across sessions.
+
+- The memory file is automatically loaded when the agent starts
+- It is saved after each step
+- Old messages are trimmed when the total content exceeds ~96 KB to keep context manageable
+- You can specify a custom memory file with `--mem <file>` or as a positional argument
+
+---
+
+## Building from Source
+
+### Prerequisites
+
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) or later
+
+### Build
+
+```bash
+dotnet build
+```
+
+### Run
+
+```bash
+# CLI mode
+set ALBERT_API_KEY=your-key
+dotnet run
+
+# Web UI mode
+set ALBERT_API_KEY=your-key
+dotnet run -- --ui
+```
+
+---
+
+## AOT Publishing
+
+CSAgent supports **Ahead-of-Time (AOT) compilation** for fast startup and single-file deployment:
+
+```bash
+# Publish as a single-file AOT binary
+dotnet publish -c Release -r win-x64   # Windows
+dotnet publish -c Release -r linux-x64 # Linux
+dotnet publish -c Release -r osx-x64   # macOS
+```
+
+The AOT build produces a self-contained executable with no runtime dependencies.
+
+---
+
+## Troubleshooting
+
+### "API Key not set"
+Ensure the `ALBERT_API_KEY` environment variable is set before running.
+
+### "API 401: ..."
+Your API key is invalid or expired. Check your credentials.
+
+### "API 429: ..."
+You've hit the rate limit. Wait a moment and try again.
+
+### "command timed out (60s)"
+The shell command took longer than 60 seconds. Try breaking the task into smaller steps.
+
+### "file too large"
+The file exceeds the 500 KB read limit. Use `sh` with tools like `grep`, `head`, or `find` to inspect specific parts.
+
+### "Path is not allowed"
+File operations are restricted to the current working directory. Change to the target directory before running the agent, or use shell commands to copy files into the workspace.
+
+### Browser doesn't open automatically
+Navigate manually to **http://localhost:5050** in your browser.
+
+---
+
+## License
+
+This project is provided as-is. No external NuGet packages are required — everything is built with the .NET base class library.
+
+---
+
+*CSAgent — Zero dependencies, maximum autonomy.*
+""";
 }
