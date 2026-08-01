@@ -58,6 +58,11 @@ if (isUiMode)
     var app = builder.Build();
 
     app.MapGet("/", () => Results.Content(StaticAssets.HtmlUI, "text/html"));
+    
+    app.MapGet("/app.js", () => Results.Content(StaticAssets.JsUI, "application/javascript"));
+    
+    app.MapGet("/styles.css", () => Results.Content(StaticAssets.CssUI, "text/css"));
+
     app.MapEndpoints(memFile, modelOverride);
 
     app.Lifetime.ApplicationStarted.Register(() =>
