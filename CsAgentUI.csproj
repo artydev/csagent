@@ -17,6 +17,7 @@
 		<DebugType>none</DebugType>
 		<DebugSymbols>false</DebugSymbols>
 		<StripSymbols>true</StripSymbols>
+		<IlcGenerateDebugInfo>false</IlcGenerateDebugInfo>
 
 		<!-- Disable Static Web Assets & Globalization -->
 		<StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
@@ -28,6 +29,8 @@
 		<PublishReadyToRun>false</PublishReadyToRun>
 		<GenerateDocumentationFile>false</GenerateDocumentationFile>
 		<GenerateSerializationAssemblies>Off</GenerateSerializationAssemblies>
+		<IncludeSymbolsInSingleFile>false</IncludeSymbolsInSingleFile>
+		<DebugSymbols>false</DebugSymbols>
 	</PropertyGroup>
 
 	<!-- Remove wwwroot from build -->
@@ -48,20 +51,42 @@
 		<RemoveDir Directories="$(PublishDir)" Condition="Exists('$(PublishDir)')" />
 	</Target>
 
-	<!-- Remove PDB files after publish -->
-	<Target Name="RemovePdbFilesAfterPublish" AfterTargets="Publish">
-		<ItemGroup>
-			<PdbFiles Include="$(PublishDir)**/*.pdb" />
-		</ItemGroup>
-		<Delete Files="@(PdbFiles)" />
-		<Message Text="Removed PDB files from publish directory" Importance="high" />
-	</Target>
+	<!-- Embed UI assets -->
 	<ItemGroup>
 		<EmbeddedResource Include="src\UI\assets\index.html" />
 		<EmbeddedResource Include="src\UI\assets\app.js" />
 		<EmbeddedResource Include="src\UI\assets\styles.css" />
 	</ItemGroup>
+
+	<!-- Exclude config/data files from publish -->
+	<ItemGroup>
+		<Content Remove="agent_memory.json" />
+		<None Remove="agent_memory.json" />
+	</ItemGroup>
+
+	<!-- Remove PDB and unwanted files BEFORE and AFTER publish -->
+	<Target Name="RemovePdbBeforePublish" BeforeTargets="PrepareForPublish">
+		<ItemGroup>
+			<PdbFilesToDelete Include="$(PublishDir)*.pdb" />
+			<PdbFilesToDelete Include="$(PublishDir)**\*.pdb" />
+			<JsonFilesToDelete Include="$(PublishDir)*.json" />
+			<JsonFilesToDelete Include="$(PublishDir)**\*.json" />
+		</ItemGroup>
+		<Delete Files="@(PdbFilesToDelete)" />
+		<Delete Files="@(JsonFilesToDelete)" />
+	</Target>
+
+	<Target Name="RemovePdbAfterPublish" AfterTargets="Publish">
+		<ItemGroup>
+			<PdbFilesToDelete Include="$(PublishDir)*.pdb" />
+			<PdbFilesToDelete Include="$(PublishDir)**\*.pdb" />
+			<JsonFilesToDelete Include="$(PublishDir)*.json" />
+			<JsonFilesToDelete Include="$(PublishDir)**\*.json" />
+		</ItemGroup>
+		<Delete Files="@(PdbFilesToDelete)" ContinueOnError="true" />
+		<Delete Files="@(JsonFilesToDelete)" ContinueOnError="true" />
+		<RemoveDir Directories="$(PublishDir)refs" Condition="Exists('$(PublishDir)refs')" />
+		<Message Text="✓ Removed PDB, JSON, and ref files from publish output" Importance="high" />
+	</Target>
+
 </Project>
-
-	
-
