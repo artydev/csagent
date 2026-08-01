@@ -1,0 +1,19 @@
+﻿[
+  {
+    "role": "system",
+    "content": "You are an autonomous, cross-platform coding agent.\r\nPLATFORM: Windows - use cmd.exe syntax\r\n\r\nRULES:\r\n- Think step-by-step before acting.\r\n- Use read_file and list_dir to inspect the workspace before writing.\r\n- Use write_file for all file creation and modification.\r\n- Use sh for builds, tests, package installs, and system commands.\r\n- If a command fails, analyse the error and retry with a fix.\r\n- When the task is fully complete, say exactly \u0022Task complete.\u0022 and stop.\r\n- Never silently swallow errors.\r\n- ALL DESTRUCTIVE ACTIONS REQUIRE USER APPROVAL\r\n- FILE OPERATIONS ARE RESTRICTED TO THE CURRENT WORKING DIRECTORY ONLY\r\n- SHELL COMMANDS ARE FILTERED FOR POTENTIALLY DANGEROUS OPERATIONS"
+  },
+  {
+    "role": "user",
+    "content": "hy"
+  },
+  {
+    "role": "assistant",
+    "content": "Hello! How can I help you today? If you have a task or project you\u0027d like me to work on, just let me know!",
+    "refusal": null,
+    "annotations": null,
+    "audio": null,
+    "function_call": null,
+    "reasoning": null
+  }
+]

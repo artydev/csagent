@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSAgent Console</title>
+<link href="styles.css" rel="stylesheet" />
+</head>
+<body>
+<div class="container">
+    <header>
+        <div class="brand">
+            <h2>
+                <span class="status-dot"></span>
+                CSAgent
+                <span class="version">DUAL v1.0</span>
+            </h2>
+        </div>
+        <div class="status">
+            <span class="status-dot"></span>
+            SYSTEM READY
+        </div>
+    </header>
+    <div id="log"></div>
+    <div class="input-area">
+        <input
+            id="in"
+            autocomplete="off"
+            placeholder="Ask CSAgent anything... (All destructive actions require approval)"
+            onkeypress="if(event.key==='Enter'){run();}">
+    </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
