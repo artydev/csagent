@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
 namespace CsAgentUI;
 
 public static class UI
@@ -39,9 +42,37 @@ public static class UI
     public static void ToolCall(string name, string args)
     {
         Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine($"\n+- TOOL: {name} ");
-        foreach (var line in args.Split('\n'))
-            Console.WriteLine($"|  {line}");
+        Console.WriteLine($"\n+- TOOL CALL: {name}");
+
+        // Parse the JSON arguments and display them as key-value pairs
+        try
+        {
+            var json = JsonNode.Parse(args);
+            if (json is JsonObject obj)
+            {
+                foreach (var kvp in obj)
+                {
+                    var val = kvp.Value?.ToString() ?? "";
+                    // Truncate very long values for display
+                    if (val.Length > 200)
+                        val = val[..200] + $"... ({val.Length} chars total)";
+                    Console.WriteLine($"|   {kvp.Key}: {val}");
+                }
+            }
+            else
+            {
+                // Fallback: show raw JSON
+                foreach (var line in args.Split('\n'))
+                    Console.WriteLine($"|  {line}");
+            }
+        }
+        catch
+        {
+            // Fallback: show raw JSON
+            foreach (var line in args.Split('\n'))
+                Console.WriteLine($"|  {line}");
+        }
+
         Console.WriteLine("+--------------------------------------------------------------");
         Console.ResetColor();
     }

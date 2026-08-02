@@ -5,6 +5,7 @@
 //   1. Parse Markdown and apply Prism syntax highlighting
 //   2. Handle user input and SSE (Server-Sent Events) chat stream
 //   3. Render messages into the log container
+//   4. Display step counter in the header
 // =============================================================================
 
 // -----------------------------------------------------------------------------
@@ -128,7 +129,107 @@ function createDangerMessage(text) {
 }
 
 /**
- * Create a DOM element for a generic log message (thought, result, etc.).
+ * Create a DOM element for a tool call message.
+ *
+ * Displays the tool name prominently and formats the arguments
+ * as a structured list of key-value pairs.
+ *
+ * @param {string} name — The tool name (e.g. "write_file", "read_file")
+ * @param {string} argsJson — JSON string of the tool arguments
+ * @returns {HTMLDivElement}
+ */
+function createToolCallMessage(name, argsJson) {
+    const div = document.createElement("div");
+    div.className = "call";
+
+    // Tool name header
+    const header = document.createElement("div");
+    header.className = "call-header";
+
+    // Map tool names to readable labels with icons
+    const toolLabels = {
+        "write_file": "📝 Write File",
+        "read_file": "📖 Read File",
+        "list_dir": "📂 List Directory",
+        "sh": "💻 Shell Command"
+    };
+    header.innerHTML = `<strong>${toolLabels[name] || "🔧 " + name}</strong>`;
+    div.appendChild(header);
+
+    // Parse and display arguments
+    try {
+        const args = JSON.parse(argsJson);
+        const argList = document.createElement("div");
+        argList.className = "call-args";
+
+        for (const [key, value] of Object.entries(args)) {
+            const argRow = document.createElement("div");
+            argRow.className = "call-arg-row";
+
+            const keySpan = document.createElement("span");
+            keySpan.className = "call-arg-key";
+            keySpan.textContent = key + ":";
+            argRow.appendChild(keySpan);
+
+            const valSpan = document.createElement("span");
+            valSpan.className = "call-arg-value";
+
+            // Truncate very long values
+            let displayVal = String(value);
+            if (displayVal.length > 300) {
+                displayVal = displayVal.substring(0, 300) + `... (${displayVal.length} chars total)`;
+            }
+            valSpan.textContent = displayVal;
+            argRow.appendChild(valSpan);
+
+            argList.appendChild(argRow);
+        }
+
+        div.appendChild(argList);
+    } catch {
+        // Fallback: show raw JSON in a styled pre block
+        const raw = document.createElement("pre");
+        raw.className = "call-raw";
+        raw.textContent = argsJson;
+        div.appendChild(raw);
+    }
+
+    return div;
+}
+
+/**
+ * Create a DOM element for a tool result message.
+ *
+ * Tool results are raw data (file contents, command output, errors),
+ * NOT Markdown. They are displayed as plain text in a code block
+ * to avoid Markdown rendering issues (e.g. '#' in file contents
+ * being treated as headings).
+ *
+ * @param {string} content — The raw result text
+ * @param {boolean} isError — Whether this is an error result
+ * @returns {HTMLDivElement}
+ */
+function createToolResultMessage(content, isError) {
+    const div = document.createElement("div");
+    div.className = isError ? "danger" : "result";
+
+    // Show a brief header
+    const header = document.createElement("div");
+    header.className = "result-header";
+    header.textContent = isError ? "✗ Error" : "✓ Result";
+    div.appendChild(header);
+
+    // Wrap content in a pre block for plain-text display
+    const pre = document.createElement("pre");
+    pre.className = "result-content";
+    pre.textContent = content;
+    div.appendChild(pre);
+
+    return div;
+}
+
+/**
+ * Create a DOM element for a generic log message.
  *
  * @param {string} type — The message type (used as CSS class)
  * @param {string} content — The text content
@@ -138,8 +239,8 @@ function createGenericMessage(type, content) {
     const div = document.createElement("div");
     div.className = type;
 
-    if (type === "result" || type === "thought") {
-        // Render as formatted Markdown
+    if (type === "thought") {
+        // Assistant thoughts are Markdown-formatted text
         div.appendChild(parseMarkdown(content));
     } else {
         div.innerText = `[${type}] ${content}`;
@@ -155,11 +256,6 @@ function createGenericMessage(type, content) {
  * @param {HTMLElement} log — The log container element
  */
 function appendMessageToLog(message, log) {
-    const content =
-        typeof message.data === "string"
-            ? message.data
-            : JSON.stringify(message.data);
-
     let element;
 
     switch (message.type) {
@@ -167,13 +263,36 @@ function appendMessageToLog(message, log) {
             element = createDoneMessage();
             break;
         case "warning":
-            element = createWarningMessage(content);
+            element = createWarningMessage(
+                typeof message.data === "string" ? message.data : JSON.stringify(message.data)
+            );
             break;
         case "danger":
-            element = createDangerMessage(content);
+            element = createDangerMessage(
+                typeof message.data === "string" ? message.data : JSON.stringify(message.data)
+            );
+            break;
+        case "call":
+            // Tool call messages have data: { n: toolName, a: argsJson }
+            if (message.data && typeof message.data === "object" && message.data.n) {
+                element = createToolCallMessage(message.data.n, message.data.a);
+            } else {
+                element = createGenericMessage(message.type, JSON.stringify(message.data));
+            }
+            break;
+        case "result":
+            // Tool result messages have data: { r: resultText, e: isError }
+            if (message.data && typeof message.data === "object" && "r" in message.data) {
+                element = createToolResultMessage(message.data.r, message.data.e);
+            } else {
+                element = createGenericMessage(message.type, JSON.stringify(message.data));
+            }
             break;
         default:
-            element = createGenericMessage(message.type, content);
+            element = createGenericMessage(
+                message.type,
+                typeof message.data === "string" ? message.data : JSON.stringify(message.data)
+            );
             break;
     }
 
@@ -190,7 +309,36 @@ function scrollToBottom(log) {
 }
 
 // -----------------------------------------------------------------------------
-// SECTION 3 — User Input
+// SECTION 3 — Step Counter
+// -----------------------------------------------------------------------------
+
+/**
+ * Update the step counter in the header.
+ *
+ * The step event data has the shape { n: currentStep, m: maxSteps }.
+ * When the task is done or an error occurs, reset to "Ready".
+ *
+ * @param {object} data — The step data object
+ */
+function updateStepCounter(data) {
+    const counter = document.getElementById("step-counter");
+    if (!counter) return;
+
+    if (data && typeof data.n === "number" && typeof data.m === "number") {
+        counter.textContent = `Step ${data.n} of ${data.m}`;
+    }
+}
+
+/**
+ * Reset the step counter to its idle state.
+ */
+function resetStepCounter() {
+    const counter = document.getElementById("step-counter");
+    if (counter) counter.textContent = "Ready";
+}
+
+// -----------------------------------------------------------------------------
+// SECTION 4 — User Input
 // -----------------------------------------------------------------------------
 
 /**
@@ -207,7 +355,7 @@ function appendUserMessage(prompt, log) {
 }
 
 // -----------------------------------------------------------------------------
-// SECTION 4 — SSE (Server-Sent Events) Stream
+// SECTION 5 — SSE (Server-Sent Events) Stream
 // -----------------------------------------------------------------------------
 
 /**
@@ -223,16 +371,25 @@ function startChatStream(prompt, log) {
 
     stream.onmessage = function (event) {
         const message = JSON.parse(event.data);
+
+        // Handle step events in the header counter, not in the log
+        if (message.type === "step") {
+            updateStepCounter(message.data);
+            return;
+        }
+
         appendMessageToLog(message, log);
         scrollToBottom(log);
 
-        if (message.type === "done") {
+        if (message.type === "done" || message.type === "error" || message.type === "danger") {
+            resetStepCounter();
             stream.close();
         }
     };
 
     stream.onerror = function () {
         console.error("SSE connection error — closing stream.");
+        resetStepCounter();
         stream.close();
     };
 
@@ -240,7 +397,7 @@ function startChatStream(prompt, log) {
 }
 
 // -----------------------------------------------------------------------------
-// SECTION 5 — Main Entry Point
+// SECTION 6 — Main Entry Point
 // -----------------------------------------------------------------------------
 
 /**
