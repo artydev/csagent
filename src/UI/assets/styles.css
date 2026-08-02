@@ -233,6 +233,7 @@ input {
     font-family: "JetBrains Mono",monospace !important;
 }
 
+    /* General token colors (Dracula theme) */
     .result .token.keyword,
     .thought .token.keyword {
         color: #ff79c6 !important;
@@ -256,6 +257,72 @@ input {
     .result .token.comment,
     .thought .token.comment {
         color: #6272a4 !important;
+    }
+
+    /* HTML/XML/Markup specific tokens */
+    .result .token.tag,
+    .thought .token.tag {
+        color: #ff79c6 !important;
+    }
+
+    .result .token.attr-name,
+    .thought .token.attr-name {
+        color: #50fa7b !important;
+    }
+
+    .result .token.attr-value,
+    .thought .token.attr-value {
+        color: #f1fa8c !important;
+    }
+
+    .result .token.punctuation,
+    .thought .token.punctuation {
+        color: #f8f8f2 !important;
+    }
+
+    .result .token.selector,
+    .thought .token.selector {
+        color: #ff79c6 !important;
+    }
+
+    .result .token.property,
+    .thought .token.property {
+        color: #8be9fd !important;
+    }
+
+    .result .token.boolean,
+    .thought .token.boolean {
+        color: #bd93f9 !important;
+    }
+
+    .result .token.operator,
+    .thought .token.operator {
+        color: #ff79c6 !important;
+    }
+
+    .result .token.builtin,
+    .thought .token.builtin {
+        color: #8be9fd !important;
+    }
+
+    .result .token.variable,
+    .thought .token.variable {
+        color: #f8f8f2 !important;
+    }
+
+    .result .token.constant,
+    .thought .token.constant {
+        color: #bd93f9 !important;
+    }
+
+    .result .token.regex,
+    .thought .token.regex {
+        color: #f1fa8c !important;
+    }
+
+    .result .token.important,
+    .thought .token.important {
+        color: #ff5555 !important;
     }
 
 .result .inline-code,

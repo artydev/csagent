@@ -1,104 +1,41 @@
-// Wait for Prism to load
-function waitForPrism() {
-    return new Promise((resolve) => {
-        if (typeof Prism !== "undefined") {
-            resolve();
-        } else {
-            const check = setInterval(() => {
-                if (typeof Prism !== "undefined") {
-                    clearInterval(check);
-                    resolve();
-                }
-            }, 100);
-        }
-    });
-}
-
-document.addEventListener("DOMContentLoaded", async function () {
-    await waitForPrism();
-
-    if (typeof Prism !== "undefined") {
-        Prism.plugins.autoloader.languages_path =
-            "https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/";
-    }
-});
-
+// Parse Markdown content using marked.js and trigger Prism highlighting
 function parseMarkdown(text) {
     const container = document.createElement("div");
+    container.className = "markdown-content";
+    container.innerHTML = marked.parse(text);
 
-    // Split by code blocks first
-    const parts = text.split(/(```[\s\S]*?```)/);
-
-    parts.forEach(part => {
-        if (part.match(/^```/)) {
-            // This is a code block
-            const codeMatch = part.match(/```(\w+)?\n([\s\S]*?)```/);
-            if (codeMatch) {
-                const language = codeMatch[1] || "javascript";
-                const code = codeMatch[2].trim();
-
-                const preElement = document.createElement("pre");
-                preElement.className = "language-wrapper";
-                const codeElement = document.createElement("code");
-                codeElement.className = `language-${language}`;
-                codeElement.textContent = code;
-                preElement.appendChild(codeElement);
-                container.appendChild(preElement);
-            }
-        } else {
-            // This is regular text, parse markdown syntax
-            let html = part;
-
-            // Headers: ### -> h3, ## -> h2, # -> h1
-            html = html.replace(/^### (.*?)$/gm, '<h3>$1</h3>');
-            html = html.replace(/^## (.*?)$/gm, '<h2>$1</h2>');
-            html = html.replace(/^# (.*?)$/gm, '<h1>$1</h1>');
-
-            // Bold: **text** -> <strong>text</strong>
-            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-            // Italic: *text* -> <em>text</em>
-            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-
-            // Code inline: `code` -> <code>code</code>
-            html = html.replace(/`(.*?)`/g, '<code class="inline-code">$1</code>');
-
-            // Split by line breaks and create paragraphs
-            const lines = html.split('\n');
-            lines.forEach(line => {
-                line = line.trim();
-                if (line === '') return;
-
-                if (!line.match(/^<h[1-3]/)) {
-                    const p = document.createElement("p");
-                    p.innerHTML = line;
-                    container.appendChild(p);
-                } else {
-                    const tempDiv = document.createElement("div");
-                    tempDiv.innerHTML = line;
-                    container.appendChild(tempDiv.firstChild);
-                }
-            });
+    // Ensure Prism alias exists globally
+    if (typeof Prism !== "undefined") {
+        // Create alias: Prism uses 'markup' internally for HTML/XML/SVG
+        if (Prism.languages.markup && !Prism.languages.html) {
+            Prism.languages.html = Prism.languages.markup;
         }
-    });
+        if (Prism.languages.markup && !Prism.languages.xml) {
+            Prism.languages.xml = Prism.languages.markup;
+        }
+
+        // Fix language-html mismatch: marked generates 'language-html' but
+        // Prism's grammar file is named 'markup'. We need to handle both cases.
+        container.querySelectorAll('code[class*="language-"], pre[class*="language-"]').forEach(element => {
+            let cls = element.className;
+            if (cls.includes("language-html")) {
+                cls = cls.replace("language-html", "language-markup");
+            }
+            if (cls.includes("language-xml")) {
+                cls = cls.replace("language-xml", "language-markup");
+            }
+            // Handle 'text' or 'plain' as plain text (no highlighting)
+            if (cls.includes("language-text") || cls.includes("language-plain") || cls.includes("language-plaintext")) {
+                cls = cls.replace(/language-(text|plain|plaintext)/g, "language-none");
+            }
+            element.className = cls;
+        });
+
+        // Trigger Prism highlighting on the newly rendered elements
+        Prism.highlightAllUnder(container);
+    }
 
     return container;
-}
-
-function highlightCode(element) {
-    if (typeof Prism === "undefined") {
-        console.error("Prism not loaded");
-        return;
-    }
-
-    try {
-        const codeElements = element.querySelectorAll('code[class*="language-"]');
-        codeElements.forEach(codeBlock => {
-            Prism.highlightElement(codeBlock);
-        });
-    } catch (e) {
-        console.error("Highlighting error:", e);
-    }
 }
 
 function run() {
@@ -145,26 +82,12 @@ function run() {
                     : JSON.stringify(message.data);
 
             if (message.type === "result" || message.type === "thought") {
-                // Parse markdown content
                 const parsedContent = parseMarkdown(content);
                 div.appendChild(parsedContent);
             } else {
                 div.innerText = `[${message.type}] ${content}`;
             }
             log.appendChild(div);
-
-            // Highlight code blocks after rendering
-            if (message.type === "result" || message.type === "thought") {
-                // Use multiple timeouts to ensure DOM is ready and Prism is ready
-                setTimeout(() => {
-                    highlightCode(div);
-                }, 100);
-
-                // Double-check highlighting
-                setTimeout(() => {
-                    highlightCode(div);
-                }, 300);
-            }
         }
 
         // Auto-scroll to bottom
