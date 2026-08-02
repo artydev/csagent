@@ -105,6 +105,7 @@ h2 {
 }
 
 #log {
+   
     flex: 1;
     overflow-y: auto;
     padding: 25px;
@@ -407,4 +408,17 @@ input {
     .status {
         display: none;
     }
+}
+
+
+/* Adjust */
+
+#log .thought .markdown-content {
+    padding: 0;
+    line-height: 0;
+    margin-bottom: 0
+}
+
+.result {
+    display: none;
 }
