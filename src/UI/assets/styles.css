@@ -415,8 +415,8 @@ input {
 
 #log .thought .markdown-content {
     padding: 0;
-    line-height: 0;
-    margin-bottom: 0
+    line-height: 1rem;
+    margin-bottom: 0;
 }
 
 .result {
