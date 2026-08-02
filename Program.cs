@@ -28,7 +28,7 @@ builder.Logging.SetMinimumLevel(LogLevel.Critical);
 
 var isUiMode = args.Contains("--ui");
 
-isUiMode = true;
+
 
 // ── Argument helpers ────────────────────────────────────────────────────────
 
