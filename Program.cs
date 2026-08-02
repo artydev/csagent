@@ -28,6 +28,8 @@ builder.Logging.SetMinimumLevel(LogLevel.Critical);
 
 var isUiMode = args.Contains("--ui");
 
+isUiMode = true;
+
 // ── Argument helpers ────────────────────────────────────────────────────────
 
 static string GetMemoryFile(string[] args)
