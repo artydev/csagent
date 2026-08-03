@@ -478,11 +478,6 @@ input {
 
 /* ── Adjustments ── */
 
-/* Don' remove this line */
-.result {
-    display: none;
-}
-
 #log .thought .markdown-content {
     padding: 0;
     line-height: 1rem;

@@ -27,8 +27,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.SetMinimumLevel(LogLevel.Critical);
 
 var isUiMode = args.Contains("--ui");
-
-// isUiMode = true;
+var isDryRun = args.Contains("--dry-run");
 
 // ── Argument helpers ────────────────────────────────────────────────────────
 
@@ -38,7 +37,7 @@ static string GetMemoryFile(string[] args)
         if (args[i] == "--mem" && i + 1 < args.Length) return args[i + 1];
 
     foreach (var arg in args)
-        if (arg != "--ui" && !arg.StartsWith("-")) return arg;
+        if (arg != "--ui" && arg != "--dry-run" && !arg.StartsWith("-")) return arg;
 
     return "agent_memory.json";
 }
@@ -102,13 +101,15 @@ else
     // Use unified model from LlmSettings, with optional override
     var model = modelOverride ?? LlmSettings.Model;
     Console.WriteLine($"  Model: {model}");
+    if (isDryRun)
+        Console.WriteLine("  Dry-run: ON (no changes will be made)");
     Console.WriteLine();
 
     using var agent = new CodingAgent(
         apiKey,
         LlmSettings.Endpoint,
         model,
-        new AgentOptions(Confirm: true),
+        new AgentOptions(Confirm: true, DryRun: isDryRun),
         new ConsoleObserver());
 
     while (true)

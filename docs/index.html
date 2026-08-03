@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSAgent — Cross-Platform Autonomous Coding Agent</title>
+
+    <!-- Prism.js Light Theme -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" rel="stylesheet" />
+
+    <!-- Prism.js Core + Languages -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-csharp.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
+
+    <style>
+        /* ── Light Professional Theme ── */
+        :root {
+            --bg: #ffffff;
+            --panel: #f5f7fb;
+            --border: #cbd5e1;
+            --primary: #0052a3;
+            --text: #0f172a;
+            --muted: #475569;
+            --accent-pink: #be185d;
+            --accent-green: #059669;
+            --accent-yellow: #a16207;
+            --accent-orange: #c2410c;
+            --accent-red: #dc2626;
+            --accent-purple: #6d28d9;
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12);
+            --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ── Hero Section ── */
+        .hero {
+            background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+            padding: 80px 24px 60px;
+            text-align: center;
+            border-bottom: 2px solid var(--border);
+            position: relative;
+            overflow: hidden;
+        }
+
+            .hero::before {
+                content: '';
+                position: absolute;
+                top: -50%;
+                left: -50%;
+                width: 200%;
+                height: 200%;
+                background: radial-gradient(circle at 30% 40%, rgba(0,82,163,.08) 0%, transparent 50%), radial-gradient(circle at 70% 60%, rgba(5,150,105,.06) 0%, transparent 50%);
+                pointer-events: none;
+            }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .hero-logo {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            color: var(--muted);
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .hero h1 {
+            font-family: 'Courier New', monospace;
+            font-size: clamp(2rem, 5vw, 3.2rem);
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .hero .version-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #ffffff;
+            background: var(--accent-green);
+            border: 2px solid var(--accent-green);
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .hero .tagline {
+            font-size: 1.15rem;
+            color: var(--muted);
+            max-width: 600px;
+            margin: 0 auto 30px;
+            font-weight: 400;
+        }
+
+        .hero .badge-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .hero .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            background: #e8edf7;
+            border: 1.5px solid #cbd5e1;
+            color: #0f172a;
+            font-weight: 600;
+        }
+
+            .hero .badge .dot {
+                width: 7px;
+                height: 7px;
+                border-radius: 50%;
+                display: inline-block;
+            }
+
+                .hero .badge .dot.green {
+                    background: var(--accent-green);
+                }
+
+                .hero .badge .dot.cyan {
+                    background: var(--primary);
+                }
+
+                .hero .badge .dot.pink {
+                    background: var(--accent-pink);
+                }
+
+                .hero .badge .dot.yellow {
+                    background: var(--accent-yellow);
+                }
+
+        .hero .quick-start {
+            margin-top: 32px;
+            text-align: left;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+            .hero .quick-start summary {
+                cursor: pointer;
+                color: var(--primary);
+                font-family: 'Courier New', monospace;
+                font-size: 13px;
+                padding: 8px 0;
+                user-select: none;
+                font-weight: 600;
+            }
+
+                .hero .quick-start summary:hover {
+                    color: var(--accent-green);
+                }
+
+        /* ── Navigation ── */
+        .nav-bar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            height: 52px;
+            overflow-x: auto;
+            gap: 4px;
+            box-shadow: var(--shadow-sm);
+        }
+
+            .nav-bar::-webkit-scrollbar {
+                height: 0;
+            }
+
+            .nav-bar a {
+                color: var(--muted);
+                text-decoration: none;
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                padding: 6px 14px;
+                border-radius: 6px;
+                white-space: nowrap;
+                transition: .2s;
+                flex-shrink: 0;
+                font-weight: 500;
+            }
+
+                .nav-bar a:hover {
+                    color: var(--primary);
+                    background: rgba(0,102,204,.08);
+                }
+
+                .nav-bar a.active {
+                    color: var(--primary);
+                    background: rgba(0,102,204,.12);
+                }
+
+        /* ── Main Content ── */
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 48px 24px 80px;
+        }
+
+            /* ── Section Headings ── */
+            .container h2 {
+                font-family: 'Courier New', monospace;
+                font-size: 1.6rem;
+                font-weight: 700;
+                color: var(--primary);
+                margin: 48px 0 16px;
+                padding-bottom: 8px;
+                border-bottom: 2px solid var(--border);
+            }
+
+                .container h2:first-child {
+                    margin-top: 0;
+                }
+
+            .container h3 {
+                font-family: 'Courier New', monospace;
+                font-size: 1.15rem;
+                font-weight: 600;
+                color: var(--accent-yellow);
+                margin: 28px 0 10px;
+            }
+
+            .container h4 {
+                font-family: 'Courier New', monospace;
+                font-size: 1rem;
+                font-weight: 600;
+                color: var(--accent-pink);
+                margin: 20px 0 8px;
+            }
+
+            .container p {
+                margin: 12px 0;
+                color: var(--text);
+            }
+
+            .container strong {
+                color: var(--text);
+                font-weight: 600;
+            }
+
+            .container em {
+                color: var(--accent-yellow);
+                font-style: italic;
+            }
+
+            .container a {
+                color: var(--primary);
+                text-decoration: none;
+                border-bottom: 1px solid transparent;
+                transition: .2s;
+            }
+
+                .container a:hover {
+                    border-bottom-color: var(--primary);
+                }
+
+            /* ── Code Blocks ── */
+            .container pre {
+                background: #1e293b !important;
+                border: 1.5px solid #cbd5e1 !important;
+                border-radius: 8px !important;
+                padding: 16px 18px !important;
+                margin: 16px 0 !important;
+                overflow-x: auto;
+                font-size: 13px !important;
+                line-height: 1.6 !important;
+                box-shadow: var(--shadow-sm);
+            }
+
+                .container pre code {
+                    background: transparent !important;
+                    padding: 0 !important;
+                    font-family: 'Courier New', monospace !important;
+                    font-size: 13px !important;
+                    color: #e2e8f0 !important;
+                }
+
+            .container :not(pre) > code {
+                background: #f1f5f9;
+                padding: 3px 9px;
+                border-radius: 4px;
+                font-family: 'Courier New', monospace;
+                font-size: 13px;
+                color: #059669;
+                border: 1.5px solid #cbd5e1;
+                font-weight: 600;
+            }
+
+            /* ── Lists ── */
+            .container ul, .container ol {
+                margin: 12px 0;
+                padding-left: 28px;
+            }
+
+            .container li {
+                margin: 6px 0;
+            }
+
+            .container ul li::marker {
+                color: var(--accent-pink);
+                font-weight: 600;
+            }
+
+            .container ol li::marker {
+                color: var(--primary);
+                font-weight: 600;
+            }
+
+            /* ── Tables ── */
+            .container table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 16px 0;
+                font-size: 14px;
+                box-shadow: var(--shadow-sm);
+                border-radius: 8px;
+                overflow: hidden;
+            }
+
+            .container th {
+                background: #0f172a;
+                color: #ffffff;
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                padding: 12px 16px;
+                text-align: left;
+                border-bottom: 2px solid #cbd5e1;
+                font-weight: 700;
+            }
+
+            .container td {
+                padding: 11px 16px;
+                border-bottom: 1.5px solid #e2e8f0;
+                color: var(--text);
+            }
+
+            .container tr:hover td {
+                background: #f8fafc;
+            }
+
+            .container td:first-child code {
+                background: #f1f5f9;
+                padding: 3px 8px;
+                border-radius: 4px;
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                color: #a16207;
+                border: 1.5px solid #cbd5e1;
+                font-weight: 600;
+            }
+
+            /* ── Blockquote / Note Boxes ── */
+            .container blockquote {
+                margin: 20px 0;
+                padding: 16px 20px;
+                border-left: 4px solid var(--accent-purple);
+                background: rgba(124,58,237,.05);
+                border-radius: 0 8px 8px 0;
+            }
+
+                .container blockquote p {
+                    margin: 0;
+                    color: var(--text);
+                }
+
+                .container blockquote strong {
+                    color: var(--accent-purple);
+                }
+
+            /* ── Horizontal Rule ── */
+            .container hr {
+                border: none;
+                height: 1px;
+                background: var(--border);
+                margin: 40px 0;
+            }
+
+        /* ── Feature Cards ── */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
+            margin: 20px 0;
+        }
+
+        .feature-card {
+            background: #fafbfc;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            transition: .25s;
+            box-shadow: var(--shadow-sm);
+        }
+
+            .feature-card:hover {
+                border-color: var(--primary);
+                background: #f0f7ff;
+                transform: translateY(-2px);
+                box-shadow: var(--shadow-md);
+                border-width: 2px;
+            }
+
+            .feature-card .icon {
+                font-size: 24px;
+                margin-bottom: 8px;
+            }
+
+            .feature-card h4 {
+                margin: 0 0 6px;
+                font-size: 14px;
+                color: var(--accent-pink);
+            }
+
+            .feature-card p {
+                margin: 0;
+                font-size: 13px;
+                color: var(--muted);
+                line-height: 1.6;
+            }
+
+        /* ── Tool Cards ── */
+        .tool-card {
+            background: #fafbfc;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            box-shadow: var(--shadow-sm);
+        }
+
+            .tool-card h4 {
+                margin: 0 0 4px;
+                font-size: 15px;
+                color: var(--accent-pink);
+            }
+
+            .tool-card .tool-desc {
+                color: var(--muted);
+                font-size: 13px;
+                margin: 4px 0 12px;
+            }
+
+            .tool-card .tool-params {
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                line-height: 1.8;
+            }
+
+                .tool-card .tool-params .param {
+                    color: var(--accent-pink);
+                    font-weight: 600;
+                }
+
+                .tool-card .tool-params .type {
+                    color: var(--muted);
+                    font-weight: 500;
+                }
+
+                .tool-card .tool-params .required {
+                    color: var(--accent-red);
+                    font-weight: 600;
+                }
+
+        /* ── Footer ── */
+        .footer {
+            text-align: center;
+            padding: 40px 24px;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 13px;
+            background: #fafbfc;
+        }
+
+            .footer a {
+                color: var(--primary);
+                text-decoration: none;
+                font-weight: 500;
+            }
+
+                .footer a:hover {
+                    text-decoration: underline;
+                }
+
+        /* ── Responsive ── */
+        @media (max-width: 700px) {
+            .hero {
+                padding: 48px 16px 40px;
+            }
+
+            .container {
+                padding: 28px 16px 60px;
+            }
+
+            .nav-bar {
+                padding: 0 12px;
+                gap: 2px;
+            }
+
+                .nav-bar a {
+                    font-size: 11px;
+                    padding: 6px 10px;
+                }
+
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .container table {
+                font-size: 12px;
+            }
+
+            .container th,
+            .container td {
+                padding: 8px 10px;
+            }
+        }
+
+        /* ── Prism Overrides (Light Theme) ── */
+        .token.keyword {
+            color: #0066cc !important;
+        }
+
+        .token.string {
+            color: #b87d00 !important;
+        }
+
+        .token.number {
+            color: #7c3aed !important;
+        }
+
+        .token.function {
+            color: #0d7c2c !important;
+        }
+
+        .token.comment {
+            color: #999999 !important;
+        }
+
+        .token.operator {
+            color: #c41e5e !important;
+        }
+
+        .token.builtin {
+            color: #0066cc !important;
+        }
+
+        .token.boolean {
+            color: #7c3aed !important;
+        }
+
+        .token.punctuation {
+            color: #1a1a1a !important;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!--  HERO                                                                  -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-logo"></div>
+            <h1>CSAgent</h1>
+            <div class="version-badge">v0.2.0</div>
+            <p class="tagline">
+                Zero-NuGet-dependency autonomous coding agent &mdash;
+                runs on Windows, Linux, and macOS.
+            </p>
+            <div class="badge-row">
+                <span class="badge"><span class="dot green"></span> Zero deps</span>
+                <span class="badge"><span class="dot cyan"></span> Cross-platform</span>
+                <span class="badge"><span class="dot pink"></span> AOT-ready</span>
+                <span class="badge"><span class="dot yellow"></span> SSE streaming</span>
+            </div>
+
+            <details class="quick-start">
+                <summary>⚡ Quick Start</summary>
+                <pre><code class="language-bash"># Set your API key
+set ALBERT_API_KEY=your-api-key-here
+
+# Run the web server
+csagent --ui
+
+# Or use CLI mode
+csagent</code></pre>
+            </details>
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!--  NAVIGATION                                                            -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <nav class="nav-bar">
+        <a href="#modes">Modes</a>
+        <a href="#features">Features</a>
+        <a href="#safety">Safety</a>
+        <a href="#tools">Tools</a>
+        <a href="#cli-args">CLI Args</a>
+        <a href="#models">Models</a>
+        <a href="#memory">Memory</a>
+        <a href="#build">Build</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+    </nav>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!--  MAIN CONTENT                                                          -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="container">
+
+        <!-- ── Modes of Operation ── -->
+        <h2 id="modes">Modes of Operation</h2>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="icon">💻</div>
+                <h4>CLI Mode (Default)</h4>
+                <p>Interactive terminal session. Type instructions and the agent works through them step by step. Type <code>exit</code> to quit.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🌐</div>
+                <h4>Web UI Mode</h4>
+                <p>Local web server with a modern clean interface. Real-time SSE streaming of thoughts, tool calls, and results. Syntax highlighting via Prism.js.</p>
+            </div>
+        </div>
+
+        <p>Start with <code>--ui</code> for the web interface, or no flag for CLI mode. The web UI is served at <strong>http://localhost:5050</strong>.</p>
+
+        <!-- ── Features ── -->
+        <h2 id="features">Features</h2>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="icon">📂</div>
+                <h4>File Operations</h4>
+                <p>Read, write, and list files and directories within the current workspace.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">💻</div>
+                <h4>Shell Commands</h4>
+                <p>Execute shell commands via <code>cmd.exe</code> on Windows or <code>/bin/sh</code> on Unix.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🧠</div>
+                <h4>Autonomous Reasoning</h4>
+                <p>The agent thinks step by step, inspects the workspace, and self-corrects on errors.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🔒</div>
+                <h4>Safety Layers</h4>
+                <p>Destructive action confirmation, path restriction, dangerous command filtering, and dry-run mode.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">📡</div>
+                <h4>SSE Streaming</h4>
+                <p>Real-time streaming of agent thoughts, tool calls, and results via Server-Sent Events.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">⚡</div>
+                <h4>AOT Publishing</h4>
+                <p>Single-file, self-contained native binaries with no runtime dependencies.</p>
+            </div>
+        </div>
+
+        <!-- ── Safety Features ── -->
+        <h2 id="safety">Safety Features</h2>
+
+        <p>CSAgent includes multiple layers of safety to prevent accidental damage to your system:</p>
+
+        <ol>
+            <li><strong>Destructive Action Confirmation</strong> &mdash; The <code>write_file</code> tool prompts for confirmation before modifying files on disk.</li>
+            <li><strong>Path Restriction</strong> &mdash; File operations are restricted to the current working directory and its subdirectories.</li>
+            <li><strong>Dangerous Command Filtering</strong> &mdash; Shell commands are scanned for dangerous patterns (formatting drives, registry manipulation, privilege escalation, system shutdown).</li>
+            <li><strong>Command Timeout</strong> &mdash; All shell commands have a 60-second timeout.</li>
+            <li><strong>File Size Limit</strong> &mdash; Reading files larger than 500 KB is blocked.</li>
+            <li><strong>Dry-Run Mode</strong> &mdash; The <code>--dry-run</code> flag simulates all tool executions without making changes.</li>
+        </ol>
+
+        <!-- ── Available Tools ── -->
+        <h2 id="tools">Available Tools</h2>
+
+        <div class="tool-card">
+            <h4>write_file</h4>
+            <p class="tool-desc">Write (or overwrite) a text file. Parent directories are created automatically.</p>
+            <div class="tool-params">
+                <span class="param">path</span> <span class="type">string</span> <span class="required">required</span> &mdash; File path<br>
+                <span class="param">content</span> <span class="type">string</span> <span class="required">required</span> &mdash; UTF-8 content to write
+            </div>
+        </div>
+
+        <div class="tool-card">
+            <h4>read_file</h4>
+            <p class="tool-desc">Read a text file and return its content.</p>
+            <div class="tool-params">
+                <span class="param">path</span> <span class="type">string</span> <span class="required">required</span> &mdash; File path
+            </div>
+        </div>
+
+        <div class="tool-card">
+            <h4>list_dir</h4>
+            <p class="tool-desc">List files and subdirectories in a directory.</p>
+            <div class="tool-params">
+                <span class="param">path</span> <span class="type">string</span> <span class="type">optional</span> <span class="type">default: <code>.</code></span> &mdash; Directory to list<br>
+                <span class="param">recursive</span> <span class="type">boolean</span> <span class="type">optional</span> <span class="type">default: <code>false</code></span> &mdash; Whether to list recursively
+            </div>
+        </div>
+
+        <div class="tool-card">
+            <h4>sh</h4>
+            <p class="tool-desc">Execute a shell command. Uses <code>cmd.exe</code> on Windows, <code>/bin/sh</code> elsewhere.</p>
+            <div class="tool-params">
+                <span class="param">cmd</span> <span class="type">string</span> <span class="required">required</span> &mdash; Shell command to run
+            </div>
+        </div>
+
+        <!-- ── Command-Line Arguments ── -->
+        <h2 id="cli-args">Command-Line Arguments</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Argument</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>--ui</code></td>
+                    <td>Start in Web UI mode (starts a web server at http://localhost:5050)</td>
+                </tr>
+                <tr>
+                    <td><code>--mem &lt;file&gt;</code></td>
+                    <td>Specify a custom memory/conversation file (default: <code>agent_memory.json</code>)</td>
+                </tr>
+                <tr>
+                    <td><code>--model &lt;model&gt;</code></td>
+                    <td>Override the default LLM model for the current mode</td>
+                </tr>
+                <tr>
+                    <td><code>--dry-run</code></td>
+                    <td>Simulate tool execution without making changes</td>
+                </tr>
+                <tr>
+                    <td><code>--version</code></td>
+                    <td>Display the current version of CSAgent and exit</td>
+                </tr>
+                <tr>
+                    <td><code>--doc</code></td>
+                    <td>Display full documentation in a formatted terminal view and exit</td>
+                </tr>
+                <tr>
+                    <td><code>--help</code>, <code>-h</code>, <code>/?</code></td>
+                    <td>Show help message and exit</td>
+                </tr>
+                <tr>
+                    <td><code>&lt;file&gt;</code></td>
+                    <td>Positional argument: specify a memory file without <code>--mem</code> flag</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Examples</h3>
+
+        <pre><code class="language-bash"># Web UI with custom memory file
+            csagent --ui --mem my_project_memory.json
+
+            # CLI mode with a specific memory file
+            csagent my_memory.json
+
+            # Dry run mode (simulate without making changes)
+            csagent --dry-run
+
+            # Display version
+            csagent --version
+
+            # Display full documentation in terminal
+            csagent --doc
+
+            # Show help message
+            csagent --help
+
+            # Override the LLM model in CLI mode
+            csagent --model gpt-4o-mini
+
+            # Override the LLM model in Web UI mode
+            csagent --ui --model gpt-4o-mini
+          </code></pre>
+
+        <!-- ── LLM Models ── -->
+        <h2 id="models">LLM Models</h2>
+
+        <p>CSAgent uses a <strong>single unified model</strong> for both CLI and Web UI modes. The default model is <code>deepseek-v4-flash</code>, defined in <code>LlmSettings.cs</code>. This means both modes behave identically in terms of LLM behaviour.</p>
+
+        <p>You can override the model in either mode using the <code>--model</code> argument:</p>
+
+        <pre><code class="language-bash"># CLI mode with a different model
+csagent --model gpt-4o
+
+# Web UI mode with a different model
+csagent --ui --model gpt-4o</code></pre>
+
+        <!-- ── Environment Variables ── -->
+        <h2 id="env">Environment Variables</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Variable</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>ALBERT_API_KEY</code></td>
+                    <td>Yes</td>
+                    <td>Your API key for the OpenAI-compatible endpoint</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- ── Memory & Conversation Persistence ── -->
+        <h2 id="memory">Memory &amp; Conversation Persistence</h2>
+
+        <p>CSAgent saves the conversation history to a JSON file (default: <code>agent_memory.json</code>). This allows the agent to maintain context across sessions.</p>
+
+        <ul>
+            <li>The memory file is automatically loaded when the agent starts</li>
+            <li>It is saved after each step</li>
+            <li>Old messages are trimmed when the total content exceeds ~96 KB to keep context manageable</li>
+            <li>You can specify a custom memory file with <code>--mem &lt;file&gt;</code> or as a positional argument</li>
+        </ul>
+
+        <!-- ── Building from Source ── -->
+        <h2 id="build">Building from Source</h2>
+
+        <h3>Prerequisites</h3>
+        <p><a href="https://dotnet.microsoft.com/download/dotnet/10.0" target="_blank">.NET 10.0 SDK</a> or later.</p>
+
+        <h3>Build</h3>
+        <pre><code class="language-bash">dotnet build</code></pre>
+
+        <h3>Run (after build)</h3>
+        <pre><code class="language-bash"># CLI mode
+set ALBERT_API_KEY=your-key
+csagent
+
+# Web UI mode
+set ALBERT_API_KEY=your-key
+csagent --ui</code></pre>
+
+        <h3>AOT Publishing</h3>
+        <p>CSAgent supports <strong>Ahead-of-Time (AOT) compilation</strong> for fast startup and single-file deployment:</p>
+
+        <pre><code class="language-bash"># Publish as a single-file AOT binary
+dotnet publish -c Release -r win-x64   # Windows
+dotnet publish -c Release -r linux-x64 # Linux
+dotnet publish -c Release -r osx-x64   # macOS</code></pre>
+
+        <p>The AOT build produces a self-contained executable with no runtime dependencies.</p>
+
+        <!-- ── Troubleshooting ── -->
+        <h2 id="troubleshooting">Troubleshooting</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Problem</th>
+                    <th>Solution</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>"API Key not set"</code></td>
+                    <td>Ensure the <code>ALBERT_API_KEY</code> environment variable is set before running</td>
+                </tr>
+                <tr>
+                    <td><code>"API 401: ..."</code></td>
+                    <td>Your API key is invalid or expired. Check your credentials</td>
+                </tr>
+                <tr>
+                    <td><code>"API 429: ..."</code></td>
+                    <td>You've hit the rate limit. Wait a moment and try again</td>
+                </tr>
+                <tr>
+                    <td><code>"command timed out (60s)"</code></td>
+                    <td>The shell command took longer than 60 seconds. Try breaking the task into smaller steps</td>
+                </tr>
+                <tr>
+                    <td><code>"file too large"</code></td>
+                    <td>The file exceeds the 500 KB read limit. Use <code>sh</code> with tools like <code>grep</code>, <code>head</code>, or <code>find</code> to inspect specific parts</td>
+                </tr>
+                <tr>
+                    <td><code>"Path is not allowed"</code></td>
+                    <td>File operations are restricted to the current working directory. Change to the target directory before running the agent, or use shell commands to copy files into the workspace</td>
+                </tr>
+                <tr>
+                    <td>Browser doesn't open automatically</td>
+                    <td>Navigate manually to <strong>http://localhost:5050</strong> in your browser</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <hr>
+
+        <blockquote>
+            <strong>CSAgent</strong> &mdash; Zero dependencies, maximum autonomy.
+        </blockquote>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!--  FOOTER                                                                -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="footer">
+        <p>
+            CSAgent &mdash; Built with the .NET base class library &bull;
+            No external NuGet packages required
+        </p>
+        <p style="margin-top: 8px; font-size: 12px;">
+            <a href="https://github.com" target="_blank">GitHub</a> &bull;
+            <a href="https://albert.api.etalab.gouv.fr" target="_blank">Albert API</a>
+        </p>
+    </div>
+
+</body>
+</html>
