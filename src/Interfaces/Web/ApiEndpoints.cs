@@ -1,4 +1,4 @@
-using System.Text.Json.Nodes;
+using CsAgentUI.Shared;
 
 namespace CsAgentUI.Endpoints;
 
@@ -24,9 +24,8 @@ public static class ApiEndpoints
             if (msgs.Count == 0)
                 msgs.Add(CodingAgent.SystemMessage(OperatingSystem.IsWindows()));
 
-            msgs.Add(new JsonObject { ["role"] = "user", ["content"] = prompt });
+            msgs.Add(JsonHelpers.Message("user", prompt));
 
-            // Use unified model from LlmSettings, with optional override
             var model = modelOverride ?? LlmSettings.Model;
 
             using var agent = new CodingAgent(

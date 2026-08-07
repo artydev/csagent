@@ -1,0 +1,294 @@
+using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
+namespace CsAgentUI.Core.Agent;
+
+/// <summary>
+/// Pure tool execution logic — no observer, no agent loop.
+/// All safety checks (path, command, destructive) are here.
+/// </summary>
+public static class ToolDispatcher
+{
+    private const int ShellTimeoutMs = 60_000;
+
+    /// <summary>
+    /// Dispatch a tool call by name with the given JSON arguments.
+    /// </summary>
+    public static async Task<string> DispatchAsync(string name, string argsJson, bool isWindows)
+    {
+        try
+        {
+            var args = JsonNode.Parse(argsJson) ?? new JsonObject();
+            return name switch
+            {
+                "write_file" => WriteFile(
+                    args["path"]!.GetValue<string>(),
+                    args["content"]!.GetValue<string>()),
+
+                "read_file" => ReadFile(
+                    args["path"]!.GetValue<string>()),
+
+                "list_dir" => ListDir(
+                    args["path"]?.GetValue<string>() ?? ".",
+                    args["recursive"]?.GetValue<bool>() ?? false),
+
+                "sh" => await RunShellAsync(
+                    args["cmd"]!.GetValue<string>(), isWindows),
+
+                _ => $"Error: Unknown tool '{name}'"
+            };
+        }
+        catch (Exception ex)
+        {
+            return $"Error: dispatch failed — {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Returns true if the tool name is considered destructive (requires user confirmation).
+    /// </summary>
+    public static bool IsDestructive(string name) => name is "write_file";
+
+    /// <summary>
+    /// The JSON tool definitions for the LLM API.
+    /// </summary>
+    public static readonly JsonArray ToolDefinitions = JsonNode.Parse("""
+        [
+          {
+            "type": "function",
+            "function": {
+              "name": "write_file",
+              "description": "Write (or overwrite) a text file. Parent directories are created automatically.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path":    { "type": "string", "description": "File path." },
+                  "content": { "type": "string", "description": "UTF-8 content to write." }
+                },
+                "required": ["path", "content"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "description": "Read a text file and return its content.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path": { "type": "string", "description": "File path." }
+                },
+                "required": ["path"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "list_dir",
+              "description": "List files and subdirectories in a directory.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path":      { "type": "string",  "description": "Directory to list. Defaults to '.'." },
+                  "recursive": { "type": "boolean", "description": "Whether to list recursively." }
+                },
+                "required": []
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "sh",
+              "description": "Execute a shell command. Uses cmd.exe on Windows, /bin/sh elsewhere.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "cmd": { "type": "string", "description": "Shell command to run." }
+                },
+                "required": ["cmd"]
+              }
+            }
+          }
+        ]
+        """)!.AsArray();
+
+    // ── write_file ───────────────────────────────────────────────────────────
+
+    private static string WriteFile(string path, string content)
+    {
+        try
+        {
+            var full = Path.GetFullPath(path);
+            if (!IsSafePath(full))
+                return $"Error: write_file - Path '{full}' is not allowed for writing. Only files in the current working directory are permitted.";
+
+            var dir = Path.GetDirectoryName(full);
+            if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
+            File.WriteAllText(full, content, new UTF8Encoding(false));
+            return $"OK: wrote {new FileInfo(full).Length} bytes to '{full}'";
+        }
+        catch (Exception ex) { return $"Error: write_file — {ex.Message}"; }
+    }
+
+    // ── read_file ────────────────────────────────────────────────────────────
+
+    private static string ReadFile(string path)
+    {
+        try
+        {
+            var full = Path.GetFullPath(path);
+            if (!IsSafePath(full))
+                return $"Error: read_file - Path '{full}' is not allowed for reading. Only files in the current working directory are permitted.";
+
+            if (!File.Exists(full)) return $"Error: not found '{full}'";
+            var len = new FileInfo(full).Length;
+            if (len > 512_000) return $"Error: file too large ({len / 1024} KB). Use sh to grep/head.";
+            return File.ReadAllText(full, Encoding.UTF8);
+        }
+        catch (Exception ex) { return $"Error: read_file — {ex.Message}"; }
+    }
+
+    // ── list_dir ─────────────────────────────────────────────────────────────
+
+    private static string ListDir(string path, bool recursive)
+    {
+        try
+        {
+            var full = Path.GetFullPath(path);
+            if (!IsSafePath(full))
+                return $"Error: list_dir - Path '{full}' is not allowed for listing. Only directories in the current working directory are permitted.";
+
+            if (!Directory.Exists(full)) return $"Error: directory not found '{full}'";
+
+            var opt = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+            var sb = new StringBuilder();
+
+            foreach (var d in Directory.EnumerateDirectories(full, "*", opt))
+            {
+                var dirName = Path.GetFileName(d);
+                if (dirName.StartsWith(".")) continue;
+                sb.AppendLine($"[DIR]  {Path.GetRelativePath(full, d)}/");
+            }
+
+            foreach (var f in Directory.EnumerateFiles(full, "*", opt))
+            {
+                var relPath = Path.GetRelativePath(full, f);
+                if (relPath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(p => p.StartsWith(".")))
+                    continue;
+                sb.AppendLine($"[FILE] {relPath}  ({Sz(new FileInfo(f).Length)})");
+            }
+
+            return sb.Length == 0 ? "(empty)" : sb.ToString().TrimEnd();
+        }
+        catch (Exception ex) { return $"Error: list_dir — {ex.Message}"; }
+    }
+
+    // ── sh ───────────────────────────────────────────────────────────────────
+
+    private static async Task<string> RunShellAsync(string cmd, bool isWindows)
+    {
+        try
+        {
+            if (!IsSafeCommand(cmd, isWindows))
+                return $"Error: sh - Command '{cmd}' contains potentially dangerous operations and is not allowed.";
+
+            var (file, shellArgs) = isWindows
+                ? ("cmd.exe", $"/d /s /c \"{cmd}\"")
+                : ("/bin/sh", $"-c \"{cmd.Replace("\"", "\\\"")}\"");
+
+            using var proc = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = file,
+                    Arguments = shellArgs,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    StandardOutputEncoding = Encoding.UTF8,
+                    StandardErrorEncoding = Encoding.UTF8
+                }
+            };
+
+            proc.Start();
+            var outTask = proc.StandardOutput.ReadToEndAsync();
+            var errTask = proc.StandardError.ReadToEndAsync();
+            var waitTask = proc.WaitForExitAsync();
+
+            if (await Task.WhenAny(waitTask, Task.Delay(ShellTimeoutMs)) != waitTask)
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+                return "Error: command timed out (60s).";
+            }
+
+            var output = ((await outTask) + (await errTask)).Trim();
+            var prefix = proc.ExitCode == 0 ? $"OK (exit 0):\n" : $"Error (exit {proc.ExitCode}):\n";
+            return string.IsNullOrWhiteSpace(output)
+                ? prefix.TrimEnd()
+                : prefix + output;
+        }
+        catch (Exception ex) { return $"Shell error: {ex.Message}"; }
+    }
+
+    // ── Safety checks ────────────────────────────────────────────────────────
+
+    private static bool IsSafePath(string fullPath)
+    {
+        try
+        {
+            var currentDir = Directory.GetCurrentDirectory();
+            var normalizedCurrent = Path.GetFullPath(currentDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var normalizedPath = Path.GetFullPath(fullPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return normalizedPath.StartsWith(normalizedCurrent, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsSafeCommand(string cmd, bool isWindows)
+    {
+        var lowerCmd = cmd.ToLowerInvariant();
+
+        if (isWindows)
+        {
+            var windowsDangerous = new[]
+            {
+                "format ", "format.", "del /f", "del /s", "rd /s", "rmdir /s",
+                "reg delete", "reg add", "reg import",
+                "net user", "net localgroup", "net share", "net use",
+                "takeown", "icacls", "cacls",
+                "attrib -r -s -h", "bcdedit", "diskpart",
+                "powershell start-process -verb runas", "runas",
+                "shutdown", "reboot",
+                "\\windows\\system32\\", "\\windows\\system\\", "\\program files\\",
+            };
+            foreach (var pattern in windowsDangerous)
+                if (lowerCmd.Contains(pattern)) return false;
+        }
+        else
+        {
+            var unixDangerous = new[]
+            {
+                "sudo ", "chmod", "shutdown", "reboot", "dd ", "mkfs",
+                "/etc/", "/usr/bin/", "/bin/",
+            };
+            foreach (var pattern in unixDangerous)
+                if (lowerCmd.Contains(pattern)) return false;
+        }
+
+        return true;
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private static string Sz(long b) =>
+        b < 1024 ? $"{b} B" : b < 1_048_576 ? $"{b / 1024} KB" : $"{b / 1_048_576} MB";
+}

@@ -51,11 +51,11 @@
 		<RemoveDir Directories="$(PublishDir)" Condition="Exists('$(PublishDir)')" />
 	</Target>
 
-	<!-- Embed UI assets -->
+	<!-- Embed UI assets (Web interface) -->
 	<ItemGroup>
-		<EmbeddedResource Include="src\UI\assets\index.html" />
-		<EmbeddedResource Include="src\UI\assets\app.js" />
-		<EmbeddedResource Include="src\UI\assets\styles.css" />
+		<EmbeddedResource Include="src\Interfaces\Web\assets\index.html" />
+		<EmbeddedResource Include="src\Interfaces\Web\assets\app.js" />
+		<EmbeddedResource Include="src\Interfaces\Web\assets\styles.css" />
 	</ItemGroup>
 
 	<!-- Exclude config/data files from publish -->
