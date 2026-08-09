@@ -32,7 +32,7 @@ internal static class DesktopHost
         {
             using var app = new AOTrinoApplication();
             using var window = new CsAgentWindow(args);
-            window.ResizeClient(1000, 700);
+            window.ResizeClient(1200, 800);
             window.Center();
             window.Show();
             app.Run();
