@@ -433,3 +433,4 @@ FodyWeavers.xsd
 *.msm
 *.msp
 /agent_memory.json
+*.il
