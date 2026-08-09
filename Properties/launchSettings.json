@@ -1,14 +1,13 @@
 {
-  "$schema": "https://json.schemastore.org/launchsettings.json",
   "profiles": {
     "Default": {
       "commandName": "Project",
-      "commandLineArgs": "--win",
+      "commandLineArgs": "--desktop",
       "nativeDebugging": false
     },
     "Desktop": {
       "commandName": "Project",
-      "commandLineArgs": "--win",
+      "commandLineArgs": "--desktop",
       "nativeDebugging": false
     },
     "WebUI": {
@@ -20,5 +19,6 @@
       "commandName": "Project",
       "nativeDebugging": false
     }
-  }
+  },
+  "$schema": "https://json.schemastore.org/launchsettings.json"
 }
