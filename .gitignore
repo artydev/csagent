@@ -19,6 +19,9 @@ agent_memory.json
 # Mono auto generated files
 mono_crash.*
 
+# External/unused subfolders
+Aotrino/
+
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
@@ -430,3 +433,4 @@ FodyWeavers.xsd
 *.msm
 *.msp
 /agent_memory.json
+*.il

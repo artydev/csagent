@@ -601,7 +601,7 @@
         <div class="hero-content">
             <div class="hero-logo"></div>
             <h1>CSAgent</h1>
-            <div class="version-badge">v0.2.0</div>
+            <div class="version-badge">v0.4.0</div>
             <p class="tagline">
                 Zero-NuGet-dependency autonomous coding agent &mdash;
                 runs on Windows, Linux, and macOS.
@@ -618,8 +618,11 @@
                 <pre><code class="language-bash"># Set your API key
 set ALBERT_API_KEY=your-api-key-here
 
-# Run the web server
+# Run the web server (opens browser)
 csagent --ui
+
+# Or use native desktop window (Windows only)
+csagent --native
 
 # Or use CLI mode
 csagent</code></pre>
@@ -661,9 +664,14 @@ csagent</code></pre>
                 <h4>Web UI Mode</h4>
                 <p>Local web server with a modern clean interface. Real-time SSE streaming of thoughts, tool calls, and results. Syntax highlighting via Prism.js.</p>
             </div>
+            <div class="feature-card">
+                <div class="icon">🪟</div>
+                <h4>Native Window Mode</h4>
+                <p>Native desktop window (Windows only) using AOTrino + WebView2. Same rich UI as the web mode, but in a standalone window with no browser tabs.</p>
+            </div>
         </div>
 
-        <p>Start with <code>--ui</code> for the web interface, or no flag for CLI mode. The web UI is served at <strong>http://localhost:5050</strong>.</p>
+        <p>Start with <code>--ui</code> for the web interface, <code>--native</code> for a native desktop window (Windows only), or no flag for CLI mode. The web UI is served at <strong>http://localhost:5050</strong> (use <code>--port</code> to change).</p>
 
         <!-- ── Features ── -->
         <h2 id="features">Features</h2>
@@ -698,6 +706,16 @@ csagent</code></pre>
                 <div class="icon">⚡</div>
                 <h4>AOT Publishing</h4>
                 <p>Single-file, self-contained native binaries with no runtime dependencies.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🪟</div>
+                <h4>Native Desktop Window</h4>
+                <p>Windows-native desktop window via AOTrino + WebView2 with a direct C# &harr; JS bridge.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🧩</div>
+                <h4>Three UI Implementations</h4>
+                <p>Choose from Terminal UI, Web UI (ASP.NET + SSE), or Native Window (AOTrino + WebView2).</p>
             </div>
         </div>
 
@@ -768,6 +786,14 @@ csagent</code></pre>
                     <td>Start in Web UI mode (starts a web server at http://localhost:5050)</td>
                 </tr>
                 <tr>
+                    <td><code>--native</code></td>
+                    <td>Start in Native Window mode (Windows only, uses AOTrino + WebView2)</td>
+                </tr>
+                <tr>
+                    <td><code>--port &lt;port&gt;</code>, <code>-p &lt;port&gt;</code></td>
+                    <td>Specify the port for the web server (default: 5050)</td>
+                </tr>
+                <tr>
                     <td><code>--mem &lt;file&gt;</code></td>
                     <td>Specify a custom memory/conversation file (default: <code>agent_memory.json</code>)</td>
                 </tr>
@@ -803,6 +829,12 @@ csagent</code></pre>
         <pre><code class="language-bash"># Web UI with custom memory file
             csagent --ui --mem my_project_memory.json
 
+            # Web UI on a custom port
+            csagent --ui --port 8080
+
+            # Native desktop window (Windows only)
+            csagent --native
+
             # CLI mode with a specific memory file
             csagent my_memory.json
 
@@ -828,15 +860,18 @@ csagent</code></pre>
         <!-- ── LLM Models ── -->
         <h2 id="models">LLM Models</h2>
 
-        <p>CSAgent uses a <strong>single unified model</strong> for both CLI and Web UI modes. The default model is <code>deepseek-v4-flash</code>, defined in <code>LlmSettings.cs</code>. This means both modes behave identically in terms of LLM behaviour.</p>
+        <p>CSAgent uses a <strong>single unified model</strong> for all modes. The default model is <code>deepseek-v4-flash</code>, defined in <code>LlmSettings.cs</code>. This means all modes behave identically in terms of LLM behaviour.</p>
 
-        <p>You can override the model in either mode using the <code>--model</code> argument:</p>
+        <p>You can override the model in any mode using the <code>--model</code> argument:</p>
 
         <pre><code class="language-bash"># CLI mode with a different model
 csagent --model gpt-4o
 
 # Web UI mode with a different model
-csagent --ui --model gpt-4o</code></pre>
+csagent --ui --model gpt-4o
+
+# Native window mode with a different model
+csagent --native --model gpt-4o</code></pre>
 
         <!-- ── Environment Variables ── -->
         <h2 id="env">Environment Variables</h2>
@@ -886,7 +921,11 @@ csagent
 
 # Web UI mode
 set ALBERT_API_KEY=your-key
-csagent --ui</code></pre>
+csagent --ui
+
+# Native window mode (Windows only, requires WebView2 runtime)
+set ALBERT_API_KEY=your-key
+csagent --native</code></pre>
 
         <h3>AOT Publishing</h3>
         <p>CSAgent supports <strong>Ahead-of-Time (AOT) compilation</strong> for fast startup and single-file deployment:</p>
@@ -897,6 +936,10 @@ dotnet publish -c Release -r linux-x64 # Linux
 dotnet publish -c Release -r osx-x64   # macOS</code></pre>
 
         <p>The AOT build produces a self-contained executable with no runtime dependencies.</p>
+
+        <blockquote>
+            <strong>Note:</strong> The native window mode (<code>--native</code>) requires the AOTrino library and WebView2 runtime on Windows. It is only supported on Windows.
+        </blockquote>
 
         <!-- ── Troubleshooting ── -->
         <h2 id="troubleshooting">Troubleshooting</h2>
@@ -932,6 +975,10 @@ dotnet publish -c Release -r osx-x64   # macOS</code></pre>
                 <tr>
                     <td><code>"Path is not allowed"</code></td>
                     <td>File operations are restricted to the current working directory. Change to the target directory before running the agent, or use shell commands to copy files into the workspace</td>
+                </tr>
+                <tr>
+                    <td><code>"--native is only supported on Windows"</code></td>
+                    <td>The native window mode uses AOTrino + WebView2, which are Windows-only technologies. Use <code>--ui</code> or CLI mode on other platforms</td>
                 </tr>
                 <tr>
                     <td>Browser doesn't open automatically</td>

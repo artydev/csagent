@@ -3,6 +3,9 @@ using System.Text.Json.Nodes;
 
 namespace CsAgentUI;
 
+/// <summary>
+/// Console rendering helpers for the TUI interface.
+/// </summary>
 public static class UI
 {
     public static void Banner()
@@ -44,7 +47,6 @@ public static class UI
         Console.ForegroundColor = ConsoleColor.Yellow;
         Console.WriteLine($"\n+- TOOL CALL: {name}");
 
-        // Parse the JSON arguments and display them as key-value pairs
         try
         {
             var json = JsonNode.Parse(args);
@@ -53,7 +55,6 @@ public static class UI
                 foreach (var kvp in obj)
                 {
                     var val = kvp.Value?.ToString() ?? "";
-                    // Truncate very long values for display
                     if (val.Length > 200)
                         val = val[..200] + $"... ({val.Length} chars total)";
                     Console.WriteLine($"|   {kvp.Key}: {val}");
@@ -61,14 +62,12 @@ public static class UI
             }
             else
             {
-                // Fallback: show raw JSON
                 foreach (var line in args.Split('\n'))
                     Console.WriteLine($"|  {line}");
             }
         }
         catch
         {
-            // Fallback: show raw JSON
             foreach (var line in args.Split('\n'))
                 Console.WriteLine($"|  {line}");
         }

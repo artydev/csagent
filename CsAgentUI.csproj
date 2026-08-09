@@ -1,92 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-	<PropertyGroup>
-		<OutputType>Exe</OutputType>
-		<TargetFramework>net10.0</TargetFramework>
-		<Nullable>enable</Nullable>
-		<ImplicitUsings>enable</ImplicitUsings>
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DisableRuntimeMarshalling>true</DisableRuntimeMarshalling>
+    <DebugType>none</DebugType>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishAot>true</PublishAot>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
+  </PropertyGroup>
 
-		<!-- AOT & Trimming Configuration -->
-		<PublishAot>true</PublishAot>
-		<TrimMode>full</TrimMode>
-		<SelfContained>true</SelfContained>
-		<OptimizationPreference>Size</OptimizationPreference>
+  <ItemGroup>
+    <Using Include="AOTrino" />
+    <Using Include="AOTrino.Bridge" />
+    <Using Include="AOTrino.Input" />
+    <Using Include="AOTrino.Resources" />
+    <Using Include="AOTrino.Utilities" />
+    <Using Include="DirectN" />
+    <Using Include="DirectN.Extensions" />
+    <Using Include="DirectN.Extensions.Com" />
+    <Using Include="DirectN.Extensions.Utilities" />
+    <Using Include="WebView2" />
+    <Using Include="WebView2.Utilities" />
+    <Using Alias="DirectNConstants" Include="DirectN.Constants" />
+    <Using Alias="DirectNFunctions" Include="DirectN.Functions" />
+  </ItemGroup>
 
-		<!-- Disable Debug Symbols -->
-		<DebugType>none</DebugType>
-		<DebugSymbols>false</DebugSymbols>
-		<StripSymbols>true</StripSymbols>
-		<IlcGenerateDebugInfo>false</IlcGenerateDebugInfo>
+  <ItemGroup>
+    <EmbeddedResource Include="README.md" />
+    <EmbeddedResource Include="src\Presentation\Web\assets\index.html" />
+    <EmbeddedResource Include="src\Presentation\Web\assets\app.js" />
+    <EmbeddedResource Include="src\Presentation\Web\assets\styles.css" />
+    <EmbeddedResource Include="src\Presentation\Desktop\assets\index.html" />
+    <EmbeddedResource Include="src\Presentation\Desktop\assets\app.js" />
+    <EmbeddedResource Include="src\Presentation\Desktop\assets\styles.css" />
+  </ItemGroup>
 
-		<!-- Disable Static Web Assets & Globalization -->
-		<StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
-		<InvariantGlobalization>true</InvariantGlobalization>
-
-		<!-- Publish Configuration -->
-		<PublishTrimmed>true</PublishTrimmed>
-		<PublishSingleFile>true</PublishSingleFile>
-		<PublishReadyToRun>false</PublishReadyToRun>
-		<GenerateDocumentationFile>false</GenerateDocumentationFile>
-		<GenerateSerializationAssemblies>Off</GenerateSerializationAssemblies>
-		<IncludeSymbolsInSingleFile>false</IncludeSymbolsInSingleFile>
-		<DebugSymbols>false</DebugSymbols>
-	</PropertyGroup>
-
-	<!-- Remove wwwroot from build -->
-	<ItemGroup>
-		<Compile Remove="wwwroot\**" />
-		<Content Remove="wwwroot\**" />
-		<EmbeddedResource Remove="wwwroot\**" />
-		<None Remove="wwwroot\**" />
-	</ItemGroup>
-
-	<!-- Embed README -->
-	<ItemGroup>
-		<EmbeddedResource Include="README.md" />
-	</ItemGroup>
-
-	<!-- Clear publish folder before publish -->
-	<Target Name="ClearPublishFolderBeforePublish" BeforeTargets="PrepareForPublish">
-		<RemoveDir Directories="$(PublishDir)" Condition="Exists('$(PublishDir)')" />
-	</Target>
-
-	<!-- Embed UI assets -->
-	<ItemGroup>
-		<EmbeddedResource Include="src\UI\assets\index.html" />
-		<EmbeddedResource Include="src\UI\assets\app.js" />
-		<EmbeddedResource Include="src\UI\assets\styles.css" />
-	</ItemGroup>
-
-	<!-- Exclude config/data files from publish -->
-	<ItemGroup>
-		<Content Remove="agent_memory.json" />
-		<None Remove="agent_memory.json" />
-	</ItemGroup>
-
-	<!-- Remove PDB and unwanted files BEFORE and AFTER publish -->
-	<Target Name="RemovePdbBeforePublish" BeforeTargets="PrepareForPublish">
-		<ItemGroup>
-			<PdbFilesToDelete Include="$(PublishDir)*.pdb" />
-			<PdbFilesToDelete Include="$(PublishDir)**\*.pdb" />
-			<JsonFilesToDelete Include="$(PublishDir)*.json" />
-			<JsonFilesToDelete Include="$(PublishDir)**\*.json" />
-		</ItemGroup>
-		<Delete Files="@(PdbFilesToDelete)" />
-		<Delete Files="@(JsonFilesToDelete)" />
-	</Target>
-
-	<Target Name="RemovePdbAfterPublish" AfterTargets="Publish">
-		<ItemGroup>
-			<PdbFilesToDelete Include="$(PublishDir)*.pdb" />
-			<PdbFilesToDelete Include="$(PublishDir)**\*.pdb" />
-			<JsonFilesToDelete Include="$(PublishDir)*.json" />
-			<JsonFilesToDelete Include="$(PublishDir)**\*.json" />
-		</ItemGroup>
-		<Delete Files="@(PdbFilesToDelete)" ContinueOnError="true" />
-		<Delete Files="@(JsonFilesToDelete)" ContinueOnError="true" />
-		<RemoveDir Directories="$(PublishDir)refs" Condition="Exists('$(PublishDir)refs')" />
-		<Message Text="✓ Removed PDB, JSON, and ref files from publish output" Importance="high" />
-	</Target>
+  <ItemGroup>
+    <PackageReference Include="AOTrino" Version="1.1.1" />
+  </ItemGroup>
 
 </Project>

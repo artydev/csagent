@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http;
@@ -10,15 +11,17 @@ public class SseObserver(HttpResponse res) : IAgentObserver
 
     private async Task Send(string type, object data)
     {
+      
         var id = Interlocked.Increment(ref _msgId);
         var payload = new SseMessage(id, type, data);
         var json = JsonSerializer.Serialize(payload, WebJsonContext.Default.SseMessage);
+        Debug.WriteLine(json);
         await res.WriteAsync($"data: {json}\n\n");
         await res.Body.FlushAsync();
     }
 
     public Task OnStep(int n, int m) => Send("step", new SseStep(n, m));
-    public Task OnThought(string t) => Send("thought", t);
+    public Task OnThought(string t) => Send("thought", "ceci est un simple message");
     public Task OnToolCall(string n, string a) => Send("call", new SseCall(n, a));
     public Task OnToolResult(string r, bool e) => Send("result", new SseResult(r, e));
     public Task OnDone(string m) => Send("done", m);
