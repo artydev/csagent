@@ -1,39 +1,67 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>CSAgent</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#1e1e2e;color:#cdd6f4;display:flex;flex-direction:column;height:100vh;overflow:hidden}
-header{background:#181825;padding:12px 20px;border-bottom:1px solid #313244;display:flex;align-items:center;gap:12px}
-header h1{font-size:18px;font-weight:600}
-header .badge{background:#45475a;padding:2px 10px;border-radius:10px;font-size:12px}
-main{flex:1;padding:20px;overflow-y:auto}
-.info-grid{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px}
-.info-grid .label{color:#a6adc8}
-.info-grid .value{color:#cdd6f4}
-footer{background:#181825;padding:8px 20px;border-top:1px solid #313244;font-size:12px;color:#6c7086;text-align:center}
-{{Style}}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSAgent Console</title>
+    <style>{{Style}}
+    </style>
+
+    <!-- Prism.js Dracula Theme -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dracula.min.css" rel="stylesheet" />
+
+    <!-- Marked.js v12.0.1 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
+
+    <!-- Prism.js Core -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+
+    <!-- Prism Language Components (loaded synchronously so they are instantly available) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-csharp.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-java.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-xml-doc.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-powershell.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-docker.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-go.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-php.min.js"></script>
+
 </head>
 <body>
-<header>
-<h1>CSAgent</h1>
-<span class="badge">v{{Version}}</span>
-<span class="badge">Desktop</span>
-</header>
-<main>
-<h2 style="margin-bottom:16px">Agent Configuration</h2>
-<div class="info-grid">
-<span class="label">Model</span><span class="value">{{Model}}</span>
-<span class="label">Memory File</span><span class="value">{{MemoryFile}}</span>
-<span class="label">Dry Run</span><span class="value">{{DryRun}}</span>
-<span class="label">OS</span><span class="value">{{OS}}</span>
-</div>
-</main>
-<footer>CSAgent v{{Version}} &mdash; Powered by AOTrino</footer>
-<script>{{Script}}</script>
+    <div class="container">
+        <header>
+            <div class="brand">
+                <h2>
+                    <span class="status-dot"></span>
+                    CSAgent
+                    <span class="version">v0.2</span>
+                </h2>
+            </div>
+            <div class="status">
+                <span class="status-dot"></span>
+                <span id="step-counter">Ready</span>
+            </div>
+        </header>
+        <div id="log"></div>
+        <div class="input-area">
+            <input id="in"
+                   autocomplete="off"
+                   placeholder="Ask CSAgent anything... (All destructive actions require approval)"
+                   onkeypress="if(event.key==='Enter'){run();}">
+        </div>
+    </div>
+    <script>{{Script}}</script>
 </body>
 </html>
