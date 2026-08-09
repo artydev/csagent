@@ -136,27 +136,27 @@ Both interfaces use the **exact same `CodingAgent`** — the agent doesn't know 
 ### Diagram
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     User Input                           │
-└──────────┬──────────────┬──────────────────┬────────────┘
-           │              │                  │
-     ┌─────▼─────┐  ┌────▼────┐       ┌─────▼─────┐
-     │  TUI Host │  │ Web Host│       │ Desktop   │ (future)
-     │ (Console) │  │ (ASP.NET│       │ (Avalonia)│
-     └─────┬─────┘  └────┬────┘       └─────┬─────┘
-           │              │                  │
-     ┌─────▼──────────────▼──────────────────▼─────┐
-     │           IAgentObserver                     │
-     │  (ConsoleObserver / SseObserver / ...)       │
-     └─────────────────────┬────────────────────────┘
-                           │
-              ┌────────────▼────────────┐
-              │      CodingAgent        │
-              │     (src/Core/)         │
-              │  - LlmClient            │
-              │  - ToolDispatcher       │
-              │  - MemoryStore          │
-              └─────────────────────────┘
+┌─────────────────────────────────────────┐
+│              User Input                  │
+└──────────┬──────────────────┬────────────┘
+           │                  │
+     ┌─────▼─────┐      ┌────▼────┐
+     │  TUI Host  │      │ Web Host│
+     │ (Console)  │      │(ASP.NET)│
+     └─────┬─────┘      └────┬────┘
+           │                  │
+     ┌─────▼──────────────────▼─────┐
+     │       IAgentObserver          │
+     │ (ConsoleObserver / SseObserver)│
+     └─────────────────┬──────────────┘
+                       │
+          ┌────────────▼────────────┐
+          │      CodingAgent        │
+          │     (src/Core/)         │
+          │  - LlmClient            │
+          │  - ToolDispatcher       │
+          │  - MemoryStore          │
+          └─────────────────────────┘
 ```
 
 ### Why this matters

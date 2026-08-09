@@ -1,23 +1,24 @@
 {
   "$schema": "https://json.schemastore.org/launchsettings.json",
   "profiles": {
-    "http": {
+    "Default": {
       "commandName": "Project",
-      "dotnetRunMessages": true,
-      "launchBrowser": true,
-      "applicationUrl": "http://localhost:5062",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
+      "commandLineArgs": "--win",
+      "nativeDebugging": false
     },
-    "https": {
+    "Desktop": {
       "commandName": "Project",
-      "dotnetRunMessages": true,
-      "launchBrowser": true,
-      "applicationUrl": "https://localhost:7241;http://localhost:5062",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
+      "commandLineArgs": "--win",
+      "nativeDebugging": false
+    },
+    "WebUI": {
+      "commandName": "Project",
+      "commandLineArgs": "--ui",
+      "nativeDebugging": false
+    },
+    "Terminal": {
+      "commandName": "Project",
+      "nativeDebugging": false
     }
   }
 }

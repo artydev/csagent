@@ -1,0 +1,312 @@
+﻿#region assembly AOTrino, Version=1.1.1.0, Culture=neutral, PublicKeyToken=null
+// C:\Users\sdidio-ccrf\.nuget\packages\aotrino\1.1.1\lib\net10.0-windows10.0.19041\AOTrino.dll
+// Decompiled with ICSharpCode.Decompiler 9.1.0.7988
+#endregion
+
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using AOTrino.Resources;
+using DirectN;
+using DirectN.Extensions.Utilities;
+using WebView2.Utilities;
+
+namespace AOTrino;
+
+public class AOTrinoApplication : CompositionApplication
+{
+    private const string _defaultBackgroundColor = "00000000";
+
+    private const int _webView2MissingExitCode = 1;
+
+    private const int _unsupportedWindowsExitCode = 2;
+
+    private static readonly Version _minimumWindowsVersion = new Version(10, 0);
+
+    public const string WebView2DownloadUrl = "https://go.microsoft.com/fwlink/p/?LinkId=2124703";
+
+    public new static AOTrinoApplication? Current => Application.Current as AOTrinoApplication;
+
+    public AOTrinoPaths Paths { get; }
+
+    public WebRoot WebRoot { get; }
+
+    public string WebView2Version { get; }
+
+    public string? BrowserExecutableFolder { get; set; }
+
+    public string AOTrinoVersion { get; } = typeof(AOTrinoApplication).Assembly.GetInformationalVersion();
+
+    public AOTrinoApplication(Assembly? appAssembly = null, string? browserExecutableFolder = null)
+    {
+        WindowSynchronizationContext.Install();
+        CheckErrorReporting();
+        BrowserExecutableFolder = browserExecutableFolder;
+        Assembly assembly = appAssembly ?? Assembly.GetEntryAssembly() ?? typeof(AOTrinoApplication).Assembly;
+        Paths = CreatePaths() ?? throw new InvalidOperationException("CreatePaths returned null for assembly " + assembly.FullName);
+        WebRoot = CreateWebRoot(assembly, Paths) ?? throw new InvalidOperationException($"CreateWebRoot returned null for assembly {assembly.FullName} and paths {Paths}");
+        WebView2Utilities.Initialize(typeof(AOTrinoApplication).Assembly);
+        string text = BrowserExecutableFolder;
+        if (!string.IsNullOrWhiteSpace(text) && !Directory.Exists(text))
+        {
+            text = null;
+        }
+
+        string availableCoreWebView2BrowserVersionString = WebView2Utilities.GetAvailableCoreWebView2BrowserVersionString(text);
+        CheckWebView2Runtime(availableCoreWebView2BrowserVersionString);
+        WebView2Version = availableCoreWebView2BrowserVersionString;
+        Environment.SetEnvironmentVariable("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "00000000");
+        WebRoot.EnsureFilesAsync();
+    }
+
+    protected virtual AOTrinoPaths CreatePaths()
+    {
+        return new AOTrinoPaths(Assembly.GetEntryAssembly() ?? typeof(AOTrinoApplication).Assembly);
+    }
+
+    protected virtual WebRoot CreateWebRoot(Assembly assembly, AOTrinoPaths paths)
+    {
+        return new WebRoot(assembly, paths);
+    }
+
+    public new void TraceInfo(object? message = null, [CallerMemberName] string? methodName = null)
+    {
+        Trace(TraceLevel.Info, message, methodName);
+    }
+
+    public new void TraceWarning(object? message = null, [CallerMemberName] string? methodName = null)
+    {
+        Trace(TraceLevel.Warning, message, methodName);
+    }
+
+    public new void TraceError(object? message = null, [CallerMemberName] string? methodName = null)
+    {
+        Trace(TraceLevel.Error, message, methodName);
+    }
+
+    public new void TraceVerbose(object? message = null, [CallerMemberName] string? methodName = null)
+    {
+        Trace(TraceLevel.Verbose, message, methodName);
+    }
+
+    public new virtual void Trace(TraceLevel level, object? message = null, [CallerMemberName] string? methodName = null)
+    {
+        Application.Trace(level, message, methodName);
+    }
+
+    protected virtual void CheckErrorReporting()
+    {
+        if (!IsTaskDialogAvailable())
+        {
+            TraceWarning("comctl32 version 6 is not active: this application's manifest doesn't reference Microsoft.Windows.Common-Controls 6.0.0.0. Errors will be reported in a plain message box, and the UI is not visual-styled.", "CheckErrorReporting");
+            Application.ShowFatalErrorFunc = ShowFatalErrorWithoutTaskDialog;
+        }
+    }
+
+    private static bool IsTaskDialogAvailable()
+    {
+        HMODULE hModule = Functions.LoadLibraryW(PWSTR.From("comctl32.dll"));
+        if (hModule.Value == 0)
+        {
+            return false;
+        }
+
+        return Functions.GetProcAddress(hModule, PSTR.From("TaskDialogIndirect")) != 0;
+    }
+
+    private static bool ShowFatalErrorWithoutTaskDialog(HWND hwnd)
+    {
+        IReadOnlyList<Exception> errors = Application.GetErrors(clear: true);
+        if (errors.Count == 0)
+        {
+            return false;
+        }
+
+        string text = string.Join(Environment.NewLine + Environment.NewLine, errors.Select((Exception e) => e.GetInterestingExceptionMessage()));
+        MessageBox.Show(hwnd, text, Application.GetTitle(hwnd), MESSAGEBOX_STYLE.MB_ICONHAND);
+        return true;
+    }
+
+    protected virtual void CheckWebView2Runtime(string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            TraceInfo("WebView2 runtime not found.", "CheckWebView2Runtime");
+            ShowWebView2DownloadDialog();
+            Environment.Exit(1);
+        }
+    }
+
+    private unsafe void ShowWebView2DownloadDialog()
+    {
+        delegate* unmanaged<HWND, uint, WPARAM, LPARAM, nint, HRESULT> callback = (delegate* unmanaged<HWND, uint, WPARAM, LPARAM, nint, HRESULT>)(delegate*<HWND, uint, WPARAM, LPARAM, nint, HRESULT>)(&TaskDialogCallback);
+        TaskDialog taskDialog = new TaskDialog();
+        taskDialog.Title = Paths.AppTitle;
+        taskDialog.MainIcon = new HICON
+        {
+            Value = TaskDialog.TD_WARNING_ICON
+        };
+        taskDialog.Flags = TASKDIALOG_FLAGS.TDF_ENABLE_HYPERLINKS;
+        taskDialog.MainInstruction = Res.WebView2NotFound;
+        taskDialog.Content = string.Format(Res.WebView2Link, "https://go.microsoft.com/fwlink/p/?LinkId=2124703");
+        taskDialog.Callback = (nint)callback;
+        taskDialog.Show(HWND.Null, throwOnError: false);
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "TaskDialogCallback")]
+    private static HRESULT TaskDialogCallback(HWND hwnd, uint msg, WPARAM wParam, LPARAM lParam, nint lpRefData)
+    {
+        if (msg == 3)
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                UseShellExecute = true,
+                FileName = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+            });
+            return Constants.E_FAIL;
+        }
+
+        return Constants.S_OK;
+    }
+
+    [ModuleInitializer]
+    internal static void CheckSupportedWindowsVersion()
+    {
+        if (OperatingSystem.IsWindows() && !(Environment.OSVersion.Version >= _minimumWindowsVersion))
+        {
+            Application.Trace(TraceLevel.Error, $"Windows {Environment.OSVersion.Version} is not supported; {_minimumWindowsVersion} or later is required.", "CheckSupportedWindowsVersion");
+            try
+            {
+                ShowUnsupportedWindowsDialog();
+            }
+            catch
+            {
+            }
+
+            Environment.Exit(2);
+        }
+    }
+
+    private static void ShowUnsupportedWindowsDialog()
+    {
+        string title = Application.GetTitle(HWND.Null);
+        string windowsVersionNotSupported = Res.WindowsVersionNotSupported;
+        string text = string.Format(Res.WindowsVersionNotSupportedDetail, Environment.OSVersion.VersionString);
+        if (IsTaskDialogAvailable())
+        {
+            TaskDialog taskDialog = new TaskDialog();
+            taskDialog.Title = title;
+            taskDialog.MainIcon = new HICON
+            {
+                Value = TaskDialog.TD_ERROR_ICON
+            };
+            taskDialog.MainInstruction = windowsVersionNotSupported;
+            taskDialog.Content = text;
+            taskDialog.Show(HWND.Null, throwOnError: false);
+        }
+        else
+        {
+            MessageBox.Show(HWND.Null, windowsVersionNotSupported + Environment.NewLine + Environment.NewLine + text, title, MESSAGEBOX_STYLE.MB_ICONHAND);
+        }
+    }
+}
+#if false // Journal de décompilation
+'313' éléments dans le cache
+------------------
+Résoudre : 'System.Runtime, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Un seul assembly trouvé : 'System.Runtime, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.Runtime.dll'
+------------------
+Résoudre : 'System.Runtime.InteropServices, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Un seul assembly trouvé : 'System.Runtime.InteropServices, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.Runtime.InteropServices.dll'
+------------------
+Résoudre : 'DirectN, Version=1.6.5.0, Culture=neutral, PublicKeyToken=null'
+Un seul assembly trouvé : 'DirectN, Version=1.6.5.0, Culture=neutral, PublicKeyToken=null'
+Charger à partir de : 'C:\Users\sdidio-ccrf\.nuget\packages\directnaot\1.6.5\lib\net10.0\DirectN.dll'
+------------------
+Résoudre : 'System.Diagnostics.TraceSource, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Un seul assembly trouvé : 'System.Diagnostics.TraceSource, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.Diagnostics.TraceSource.dll'
+------------------
+Résoudre : 'System.Text.Json, Version=10.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51'
+Un seul assembly trouvé : 'System.Text.Json, Version=10.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.Text.Json.dll'
+------------------
+Résoudre : 'DirectN.Extensions, Version=1.6.5.0, Culture=neutral, PublicKeyToken=null'
+Un seul assembly trouvé : 'DirectN.Extensions, Version=1.6.5.0, Culture=neutral, PublicKeyToken=null'
+Charger à partir de : 'C:\Users\sdidio-ccrf\.nuget\packages\directnaot.extensions\1.6.5\lib\net10.0\DirectN.Extensions.dll'
+------------------
+Résoudre : 'WebView2, Version=1.5.0.0, Culture=neutral, PublicKeyToken=null'
+Un seul assembly trouvé : 'WebView2, Version=1.5.0.0, Culture=neutral, PublicKeyToken=null'
+Charger à partir de : 'C:\Users\sdidio-ccrf\.nuget\packages\webview2aot\1.5.0\lib\net10.0\WebView2.dll'
+------------------
+Résoudre : 'Microsoft.Windows.SDK.NET, Version=10.0.19041.38, Culture=neutral, PublicKeyToken=31bf3856ad364e35'
+Un seul assembly trouvé : 'Microsoft.Windows.SDK.NET, Version=10.0.19041.38, Culture=neutral, PublicKeyToken=31bf3856ad364e35'
+Charger à partir de : 'C:\Users\sdidio-ccrf\.nuget\packages\microsoft.windows.sdk.net.ref\10.0.19041.57\lib\net8.0\Microsoft.Windows.SDK.NET.dll'
+------------------
+Résoudre : 'System.Collections, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Un seul assembly trouvé : 'System.Collections, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.Collections.dll'
+------------------
+Résoudre : 'Microsoft.Win32.Registry, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Un seul assembly trouvé : 'Microsoft.Win32.Registry, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\Microsoft.Win32.Registry.dll'
+------------------
+Résoudre : 'System.ComponentModel.Primitives, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Un seul assembly trouvé : 'System.ComponentModel.Primitives, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.ComponentModel.Primitives.dll'
+------------------
+Résoudre : 'System.Security.Cryptography, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Un seul assembly trouvé : 'System.Security.Cryptography, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.Security.Cryptography.dll'
+------------------
+Résoudre : 'System.Collections.Concurrent, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Un seul assembly trouvé : 'System.Collections.Concurrent, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.Collections.Concurrent.dll'
+------------------
+Résoudre : 'System.ComponentModel.TypeConverter, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Un seul assembly trouvé : 'System.ComponentModel.TypeConverter, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.ComponentModel.TypeConverter.dll'
+------------------
+Résoudre : 'System.ComponentModel, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Un seul assembly trouvé : 'System.ComponentModel, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.ComponentModel.dll'
+------------------
+Résoudre : 'System.Linq, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Un seul assembly trouvé : 'System.Linq, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.Linq.dll'
+------------------
+Résoudre : 'System.Diagnostics.Process, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Un seul assembly trouvé : 'System.Diagnostics.Process, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.Diagnostics.Process.dll'
+------------------
+Résoudre : 'WinRT.Runtime, Version=2.2.0.0, Culture=neutral, PublicKeyToken=99ea127f02d97709'
+Un seul assembly trouvé : 'WinRT.Runtime, Version=2.2.0.0, Culture=neutral, PublicKeyToken=99ea127f02d97709'
+Charger à partir de : 'C:\Users\sdidio-ccrf\.nuget\packages\microsoft.windows.sdk.net.ref\10.0.19041.57\lib\net8.0\WinRT.Runtime.dll'
+------------------
+Résoudre : 'System.Numerics.Vectors, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Un seul assembly trouvé : 'System.Numerics.Vectors, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.Numerics.Vectors.dll'
+------------------
+Résoudre : 'System.Memory, Version=10.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51'
+Un seul assembly trouvé : 'System.Memory, Version=10.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.Memory.dll'
+------------------
+Résoudre : 'System.Threading, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Un seul assembly trouvé : 'System.Threading, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.Threading.dll'
+------------------
+Résoudre : 'System.ObjectModel, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Un seul assembly trouvé : 'System.ObjectModel, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.ObjectModel.dll'
+------------------
+Résoudre : 'System.Runtime.CompilerServices.Unsafe, Version=10.0.0.0, Culture=neutral, PublicKeyToken=null'
+Un seul assembly trouvé : 'System.Runtime.CompilerServices.Unsafe, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'
+Charger à partir de : 'C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.9\ref\net10.0\System.Runtime.CompilerServices.Unsafe.dll'
+#endif

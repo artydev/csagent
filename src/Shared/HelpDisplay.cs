@@ -35,7 +35,7 @@ public static class HelpDisplay
         Console.WriteLine(@"  ██║     ███████╗███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   ");
         Console.WriteLine(@"  ██║     ╚════██║██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   ");
         Console.WriteLine(@"  ╚██████╗███████║██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   ");
-        Console.WriteLine(@"   ╚═════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝  ");
+        Console.WriteLine(@"   ╚═════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═══╝  ");
         Console.ResetColor();
         C("dark");
         Console.WriteLine("  Cross-platform autonomous coding agent  |  zero NuGet deps");
@@ -51,6 +51,7 @@ public static class HelpDisplay
         Console.ResetColor();
         Console.WriteLine("    (no flag)     CLI mode — interactive terminal session");
         Console.WriteLine("    --ui          Web UI mode — starts a web server");
+        Console.WriteLine("    --native      Native window mode — AOTrino WebView2 window (Windows only)");
         Console.WriteLine();
 
         C("green");
@@ -78,9 +79,11 @@ public static class HelpDisplay
         Console.ResetColor();
         Console.WriteLine("    csagent                                       CLI mode");
         Console.WriteLine("    csagent --ui                                  Web UI mode (port 5050)");
+        Console.WriteLine("    csagent --native                              Native window mode");
         Console.WriteLine("    csagent --ui --port 8080                      Web UI on port 8080");
         Console.WriteLine("    csagent --model gpt-4o                        CLI with custom model");
         Console.WriteLine("    csagent --ui --model gpt-4o                   Web UI with custom model");
+        Console.WriteLine("    csagent --native --model gpt-4o               Native window with custom model");
         Console.WriteLine("    csagent --mem my_history.json                 CLI with custom memory file");
         Console.WriteLine("    csagent --ui --mem my_history.json            Web UI with custom memory file");
         Console.WriteLine("    csagent --dry-run                             Dry-run mode (no changes)");

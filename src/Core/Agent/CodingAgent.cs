@@ -87,7 +87,7 @@ public sealed class CodingAgent : IDisposable
                 {
                     result = "[dry-run] Tool not executed.";
                 }
-                else if (ToolDispatcher.IsDestructive(funcName))
+                else if (_opts.Confirm && ToolDispatcher.IsDestructive(funcName))
                 {
                     result = UI.Confirm($"Allow destructive action '{funcName}'?")
                         ? await ToolDispatcher.DispatchAsync(funcName, argsRaw, isWindows)

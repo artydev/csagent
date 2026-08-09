@@ -1,6 +1,6 @@
 using CsAgentUI.Shared;
 
-namespace CsAgentUI.Interfaces.Tui;
+namespace CsAgentUI.Presentation.Tui;
 
 /// <summary>
 /// Terminal UI host — interactive CLI session.

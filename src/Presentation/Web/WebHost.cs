@@ -2,7 +2,7 @@ using System.Diagnostics;
 using CsAgentUI.Endpoints;
 using CsAgentUI.Shared;
 
-namespace CsAgentUI.Interfaces.Web;
+namespace CsAgentUI.Presentation.Web;
 
 /// <summary>
 /// Web UI host — starts an ASP.NET server with SSE-based chat.
