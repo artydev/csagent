@@ -7,35 +7,15 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-
-    <!-- Required by AOTrino for LibraryImport interop -->
     <DisableRuntimeMarshalling>true</DisableRuntimeMarshalling>
-
-    <!-- Debug symbols -->
     <DebugType>none</DebugType>
-    <DebugSymbols>false</DebugSymbols>
-
-    <!-- Globalization -->
     <InvariantGlobalization>true</InvariantGlobalization>
-
-    <!-- Publish configuration -->
     <PublishSingleFile>true</PublishSingleFile>
-    <PublishReadyToRun>false</PublishReadyToRun>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <GenerateSerializationAssemblies>Off</GenerateSerializationAssemblies>
-    <IncludeSymbolsInSingleFile>false</IncludeSymbolsInSingleFile>
-
-    <!-- AOT and trimming -->
     <PublishAot>true</PublishAot>
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>full</TrimMode>
-
-    <!-- Windows-specific: enable WinForms and WPF for AOTrino compatibility -->
-    <UseWindowsForms>false</UseWindowsForms>
-    <UseWPF>false</UseWPF>
   </PropertyGroup>
 
-  <!-- Global usings required by AOTrino types (DirectN, AOTrino, etc.) -->
   <ItemGroup>
     <Using Include="AOTrino" />
     <Using Include="AOTrino.Bridge" />
@@ -52,72 +32,18 @@
     <Using Alias="DirectNFunctions" Include="DirectN.Functions" />
   </ItemGroup>
 
-  <!-- Project reference to AOTrino SDK -->
-
-  <!--
-    Exclude everything under AOTrino_src from compilation.
-    The ProjectReference above handles the AOTrino library project separately.
-    The Samples, Templates, npm, docs directories are not part of this app.
-  -->
-  <ItemGroup>
-    <Compile Remove="AOTrino_src\**" />
-    <Content Remove="AOTrino_src\**" />
-    <EmbeddedResource Remove="AOTrino_src\**" />
-    <None Remove="AOTrino_src\**" />
-  </ItemGroup>
-
-  <!-- Exclude the old empty AOTrino directory -->
-  <ItemGroup>
-    <Compile Remove="AOTrino\**" />
-    <Content Remove="AOTrino\**" />
-    <EmbeddedResource Remove="AOTrino\**" />
-    <None Remove="AOTrino\**" />
-  </ItemGroup>
-
-  <!-- Exclude temporary generated files from compilation -->
-  <ItemGroup>
-    <Compile Remove="tmp_*.cs" />
-    <None Include="tmp_*.cs" />
-  </ItemGroup>
-
-  <!-- Embed README -->
   <ItemGroup>
     <EmbeddedResource Include="README.md" />
-  </ItemGroup>
-
-  <!-- Embed Web UI assets -->
-  <ItemGroup>
     <EmbeddedResource Include="src\Presentation\Web\assets\index.html" />
     <EmbeddedResource Include="src\Presentation\Web\assets\app.js" />
     <EmbeddedResource Include="src\Presentation\Web\assets\styles.css" />
+    <EmbeddedResource Include="src\Presentation\Desktop\assets\index.html" />
+    <EmbeddedResource Include="src\Presentation\Desktop\assets\app.js" />
+    <EmbeddedResource Include="src\Presentation\Desktop\assets\styles.css" />
   </ItemGroup>
 
-  <!-- Exclude config/data files from publish -->
-  <ItemGroup>
-    <Content Remove="agent_memory.json" />
-    <None Remove="agent_memory.json" />
-  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="AOTrino" Version="1.1.1" />
   </ItemGroup>
-
-  <!-- Clear publish folder before publish -->
-  <Target Name="ClearPublishFolderBeforePublish" BeforeTargets="PrepareForPublish">
-    <RemoveDir Directories="$(PublishDir)" Condition="Exists('$(PublishDir)')" />
-  </Target>
-
-  <!-- Remove PDB and JSON files after publish -->
-  <Target Name="RemovePdbAfterPublish" AfterTargets="Publish">
-    <ItemGroup>
-      <PdbFilesToDelete Include="$(PublishDir)*.pdb" />
-      <PdbFilesToDelete Include="$(PublishDir)**\*.pdb" />
-      <JsonFilesToDelete Include="$(PublishDir)*.json" />
-      <JsonFilesToDelete Include="$(PublishDir)**\*.json" />
-    </ItemGroup>
-    <Delete Files="@(PdbFilesToDelete)" ContinueOnError="true" />
-    <Delete Files="@(JsonFilesToDelete)" ContinueOnError="true" />
-    <RemoveDir Directories="$(PublishDir)refs" Condition="Exists('$(PublishDir)refs')" />
-    <Message Text="Removed PDB, JSON, and ref files from publish output" Importance="high" />
-  </Target>
 
 </Project>

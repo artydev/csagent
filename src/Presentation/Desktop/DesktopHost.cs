@@ -1,5 +1,6 @@
-using System.Runtime.InteropServices.Marshalling;
 using CsAgentUI.Shared;
+using System.Reflection;
+using System.Runtime.InteropServices.Marshalling;
 
 namespace CsAgentUI.Presentation.Desktop;
 
@@ -12,8 +13,21 @@ internal static class DesktopHost
     /// <summary>
     /// Runs the agent with a native AOTrino desktop window.
     /// </summary>
-    public static void Run(AgentArguments args)
+    public  static void Run(AgentArguments args)
     {
+
+        var apiKey = Environment.GetEnvironmentVariable("ALBERT_API_KEY") ?? "";
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            Console.WriteLine("Error: ALBERT_API_KEY env var not set.");
+            return;
+        }
+
+
+        var messages = Task.Run(() => MemoryStore.LoadAsync(args.MemoryFile)).Result;
+        if (messages.Count == 0)
+            messages.Add(CodingAgent.SystemMessage(OperatingSystem.IsWindows()));
+
         try
         {
             using var app = new AOTrinoApplication();
@@ -58,47 +72,31 @@ internal partial class CsAgentWindow : AOTrinoWindow
         var dryRunText = _args.IsDryRun ? "ON" : "OFF";
         var os = OperatingSystem.IsWindows() ? "Windows" : OperatingSystem.IsLinux() ? "Linux" : "macOS";
 
-        var html = "<!DOCTYPE html>" +
-        "<html lang=\"en\">" +
-        "<head>" +
-        "<meta charset=\"UTF-8\">" +
-        "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\">" +
-        "<title>CSAgent</title>" +
-        "<style>" +
-        "*{margin:0;padding:0;box-sizing:border-box}" +
-        "body{font-family:'Segoe UI',system-ui,sans-serif;background:#1e1e2e;color:#cdd6f4;display:flex;flex-direction:column;height:100vh;overflow:hidden}" +
-        "header{background:#181825;padding:12px 20px;border-bottom:1px solid #313244;display:flex;align-items:center;gap:12px}" +
-        "header h1{font-size:18px;font-weight:600}" +
-        "header .badge{background:#45475a;padding:2px 10px;border-radius:10px;font-size:12px}" +
-        "main{flex:1;padding:20px;overflow-y:auto}" +
-        ".info-grid{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px}" +
-        ".info-grid .label{color:#a6adc8}" +
-        ".info-grid .value{color:#cdd6f4}" +
-        "footer{background:#181825;padding:8px 20px;border-top:1px solid #313244;font-size:12px;color:#6c7086;text-align:center}" +
-        "</style>" +
-        "</head>" +
-        "<body>" +
-        "<header>" +
-        "<h1>CSAgent</h1>" +
-        "<span class=\"badge\">v" + version + "</span>" +
-        "<span class=\"badge\">Desktop</span>" +
-        "</header>" +
-        "<main>" +
-        "<h2 style=\"margin-bottom:16px\">Agent Configuration</h2>" +
-        "<div class=\"info-grid\">" +
-        "<span class=\"label\">Model</span><span class=\"value\">" + model + "</span>" +
-        "<span class=\"label\">Memory File</span><span class=\"value\">" + memFile + "</span>" +
-        "<span class=\"label\">Dry Run</span><span class=\"value\">" + dryRunText + "</span>" +
-        "<span class=\"label\">OS</span><span class=\"value\">" + os + "</span>" +
-        "</div>" +
-        "</main>" +
-        "<footer>CSAgent v" + version + " &mdash; Powered by AOTrino</footer>" +
-        "</body>" +
-        "</html>";
+        var html = LoadEmbeddedResource("CsAgentUI.src.Presentation.Desktop.assets.index.html");
+        var script = LoadEmbeddedResource("CsAgentUI.src.Presentation.Desktop.assets.app.js");
+        var style  = LoadEmbeddedResource("CsAgentUI.src.Presentation.Desktop.assets.styles.css");
+
+        html = html.Replace("{{Version}}", version)
+                   .Replace("{{Model}}", model)
+                   .Replace("{{MemoryFile}}", memFile)
+                   .Replace("{{DryRun}}", dryRunText)
+                   .Replace("{{OS}}", os)
+                   .Replace("{{Script}}", script)
+                   .Replace("{{Style}}", style);
 
         var encoded = Uri.EscapeDataString(html);
         
         return "data:text/html;charset=utf-8," + encoded;
+    }
+
+    private static string LoadEmbeddedResource(string resourceName)
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+        using var stream = assembly.GetManifestResourceStream(resourceName);
+        if (stream is null)
+            return string.Empty;
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
     }
 
     /// <summary>

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>CSAgent</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#1e1e2e;color:#cdd6f4;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+header{background:#181825;padding:12px 20px;border-bottom:1px solid #313244;display:flex;align-items:center;gap:12px}
+header h1{font-size:18px;font-weight:600}
+header .badge{background:#45475a;padding:2px 10px;border-radius:10px;font-size:12px}
+main{flex:1;padding:20px;overflow-y:auto}
+.info-grid{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px}
+.info-grid .label{color:#a6adc8}
+.info-grid .value{color:#cdd6f4}
+footer{background:#181825;padding:8px 20px;border-top:1px solid #313244;font-size:12px;color:#6c7086;text-align:center}
+{{Style}}
+</style>
+</head>
+<body>
+<header>
+<h1>CSAgent</h1>
+<span class="badge">v{{Version}}</span>
+<span class="badge">Desktop</span>
+</header>
+<main>
+<h2 style="margin-bottom:16px">Agent Configuration</h2>
+<div class="info-grid">
+<span class="label">Model</span><span class="value">{{Model}}</span>
+<span class="label">Memory File</span><span class="value">{{MemoryFile}}</span>
+<span class="label">Dry Run</span><span class="value">{{DryRun}}</span>
+<span class="label">OS</span><span class="value">{{OS}}</span>
+</div>
+</main>
+<footer>CSAgent v{{Version}} &mdash; Powered by AOTrino</footer>
+<script>{{Script}}</script>
+</body>
+</html>
