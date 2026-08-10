@@ -366,7 +366,13 @@ function appendUserMessage(prompt, log) {
  * @returns {EventSource}
  */
 function startChatStream(prompt, log) {
+
+    alert("Starting chat stream with prompt: " + prompt); // Debugging alert")
+
+    return;
+
     const url = `/api/chat?prompt=${encodeURIComponent(prompt)}`;
+
     const stream = new EventSource(url);
 
     stream.onmessage = function (event) {
@@ -396,6 +402,15 @@ function startChatStream(prompt, log) {
     return stream;
 }
 
+
+
+
+
+async function startDesktopChat(prompt, log) {
+    let q = await d.MachineName
+    alert("MachineName: " + q)
+}
+
 // -----------------------------------------------------------------------------
 // SECTION 6 — Main Entry Point
 // -----------------------------------------------------------------------------
@@ -403,9 +418,27 @@ function startChatStream(prompt, log) {
 /**
  * Main entry point — called when the user presses Enter in the input field.
  *
- * Reads the prompt, displays it in the log, clears the input, and starts
- * an SSE stream for the response.
  */
+
+// capture JS console.* into .NET → routes to AOTrinoApplication.Trace* (see HostApi.OnConsoleLog)
+if (window.chrome && chrome.webview && chrome.webview.hostObjects) {
+  
+    const dotnet = chrome.webview.hostObjects.dotnet; // async proxy, fire-and-forget
+   
+    for (const level of ["log", "info", "warn", "error", "debug"]) {
+        const orig = console[level].bind(console);
+        console[level] = (...args) => {
+            try { dotnet.OnConsoleLog(level, args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ")); } catch { }
+            orig(...args);
+        };
+    }
+}
+
+
+const sync = () => chrome.webview.hostObjects.sync.dotnet;
+const async = () => chrome.webview.hostObjects.dotnet;
+const d = async();
+
 function run() {
     const input = document.getElementById("in");
     const prompt = input.value.trim();
@@ -417,5 +450,5 @@ function run() {
     input.value = "";
     scrollToBottom(log);
 
-    startChatStream(prompt, log);
+    startDesktopChat(prompt, log);
 }

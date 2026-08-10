@@ -1,4 +1,5 @@
 using CsAgentUI.Shared;
+using CsAgentUI.src.Presentation.Desktop;
 using System.Reflection;
 using System.Runtime.InteropServices.Marshalling;
 
@@ -31,6 +32,7 @@ internal static class DesktopHost
         try
         {
             using var app = new AOTrinoApplication();
+            // Must be registered before creating the window, otherwise the window will not be able to use the AOTrino runtime.
             using var window = new CsAgentWindow(args);
             window.ResizeClient(1200, 800);
             window.Center();
@@ -54,10 +56,12 @@ internal partial class CsAgentWindow : AOTrinoWindow
     private readonly AgentArguments _args;
 
     public CsAgentWindow(AgentArguments args)
-        : base("CSAgent")
+        : base(Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyTitleAttribute>()!.Title)
     {
         _args = args;
     }
+
+    protected override void RegisterHostObjects() => AddHostObject("dotnet", new DesktopAPI(this));
 
     /// <summary>
     /// Navigate to an inline HTML page with agent information.
