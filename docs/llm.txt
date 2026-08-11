@@ -1,0 +1,517 @@
+# AOTrino — Electron-like Desktop Apps on .NET AOT + WebView2
+
+AOTrino is a framework for building native Windows desktop applications using .NET 10 (Native AOT), WebView2, and any front-end framework (React, Fluent UI, vanilla HTML/JS, etc.). It produces a single-file executable for x86, x64, and ARM64.
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Your .NET App (AOT-compiled single exe)                │
+│  ┌─────────────────────────────────────────────────────┐│
+│  │  AOTrinoWindow (or HwndWebViewWindow)              ││
+│  │  ┌───────────────────────────────────────────────┐  ││
+│  │  │  WebViewWindow (base)                         │  ││
+│  │  │  - owns environment, WebView, navigation      │  ││
+│  │  │  - shared-buffer transport (JS <-> .NET)      │  ││
+│  │  │  - host objects (chrome.webview.hostObjects)  │  ││
+│  │  │  - input forwarding, window management        │  ││
+│  │  │  - file drop support                          │  ││
+│  │  └───────────────────────────────────────────────┘  ││
+│  │  ┌───────────────────────────────────────────────┐  ││
+│  │  │  D3D11SwapChainWindow (base of base)          │  ││
+│  │  │  - Direct3D 11 swap chain                     │  ││
+│  │  │  - Windows message loop                       │  ││
+│  │  │  - window management (move, resize, etc.)     │  ││
+│  │  └───────────────────────────────────────────────┘  ││
+│  └─────────────────────────────────────────────────────┘│
+│                                                         │
+│  ┌─────────────────────────────────────────────────────┐│
+│  │  AOTrinoApplication                                ││
+│  │  - application lifecycle (startup, shutdown)        ││
+│  │  - WebRoot management (extract embedded files)      ││
+│  │  - tracing / logging                                ││
+│  │  - command-line arguments                           ││
+│  └─────────────────────────────────────────────────────┘│
+│                                                         │
+│  ┌─────────────────────────────────────────────────────┐│
+│  │  WebRoot                                            ││
+│  │  - embeds front-end files in the assembly           ││
+│  │  - extracts them to disk at startup                 ││
+│  │  - serves them to the WebView                       ││
+│  └─────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Class Hierarchy
+
+```
+D3D11SwapChainWindow          (Direct3D 11 window + message loop)
+  └── WebViewWindow           (WebView2 environment, navigation, host objects, input)
+        ├── CompositionWebViewWindow  (WebView as a Windows.UI.Composition visual)
+        │     └── AOTrinoWindow       (ready-to-use app window with navigation modes)
+        └── HwndWebViewWindow         (WebView as a classic child HWND)
+```
+
+---
+
+## Key Classes
+
+### D3D11SwapChainWindow (from DirectN)
+- Base class providing a Direct3D 11 swap chain window.
+- Handles the Windows message loop (WindowProc).
+- Provides window management (move, resize, minimize, maximize, close).
+- Manages device resources (D3D11 device, swap chain).
+- Events: OnResized, OnMoved, OnPositionChanged, OnExitSizeMove, etc.
+
+### WebViewWindow (abstract)
+- **Namespace:** `AOTrino`
+- **Purpose:** Hosting-agnostic WebView2 window base class.
+- Owns the WebView2 environment, the WebView, navigation, host objects, scripts, shared-buffer transport, and all window/input plumbing.
+- **Abstract method:** `CreateController(ICoreWebView2Environment12, Action onControllerReady)` — subclasses create either a composition or HWND controller.
+- **Key properties:**
+  - `WebView` (protected) — `ComObject<ICoreWebView2_17>?`
+  - `Environment` (protected) — `ComObject<ICoreWebView2Environment12>?`
+  - `BaseController` (protected) — `ICoreWebView2Controller?`
+  - `MonitorHandle` — current monitor handle
+  - `IsFullScreen` — whether the window is full-screen
+  - `CanChangeCursor` — whether the WebView may change the cursor
+  - `SendDoubleClicks` — whether double-click events are forwarded
+- **Virtual properties (WebView2 settings):**
+  - `AreDefaultContextMenusEnabled` (default: `false`)
+  - `IsStatusBarEnabled` (default: `false`)
+  - `AreDevToolsEnabled` (default: `true` in Debug, `false` in Release)
+  - `AreBrowserAcceleratorKeysEnabled` (default: `false`)
+  - `IsBuiltInErrorPageEnabled` (default: `false`)
+  - `ReplacesNavigationErrorPage` (default: `true`)
+  - `AcceptsFileDrops` (default: `false`)
+- **Events:**
+  - `MouseMove`, `MouseLeave`, `MouseHover`, `MouseWheel`
+  - `MouseButtonDown`, `MouseButtonUp`, `MouseButtonDoubleClick`
+  - `PointerActivate`, `PointerEnter`, `PointerLeave`, `PointerWheel`, `PointerUpdate`, `PointerContactChanged`
+  - `KeyDown`, `KeyUp`, `KeyPress`
+  - `MonitorChanged`
+  - `NavigationStarting`, `NavigationCompleted`
+  - `WebMessageJsonReceived` — raw JSON from `window.__aotrino.post()` or `chrome.webview.postMessage()`
+  - `FilesDropped` — files dropped from Explorer
+- **Key methods:**
+  - `Navigate(string url)` — navigate to a URL
+  - `NavigateToString(string html)` — navigate to an HTML string
+  - `NavigateToWebRootAsync()` — navigate to the app's extracted WebRoot
+  - `AddHostObject(string name, DispatchObject hostObject)` — expose a .NET object to JS via `chrome.webview.hostObjects.{name}`
+  - `AddStartupScript(string script)` — inject a script into every page
+  - `AddStartupScriptResource(Assembly assembly, string resourceName)` — inject an embedded .js resource
+  - `CreateSharedBuffer(string name, SharedBufferAccess access)` — create a shared-memory channel between .NET and JS
+  - `ExecuteScript<T>(string script, JsonTypeInfo<T> typeInfo)` — execute JS and deserialize the result
+  - `ExecuteScriptAsJson(string script)` — execute JS and return raw JSON
+  - `ExecuteScript(string script)` — fire-and-forget script execution
+  - `BeginDrag()` — start a native window move (for custom title bars)
+  - `SetSystemBackdrop(DWM_SYSTEMBACKDROP_TYPE type)` — apply Mica/Acrylic/Tabbed backdrop
+  - `ClearBrowsingDataAll()` — clear all browsing data
+  - `GetFullScreenBounds()` — get the monitor bounds for full-screen
+  - `MaximizeOrRestore()` — toggle maximize/restore
+  - `SetCorner(DWM_WINDOW_CORNER_PREFERENCE corner)` — set window corner rounding (Windows 11)
+- **Protected virtual methods for customization:**
+  - `ConfigureSettings(ICoreWebView2Settings settings)` — additional WebView2 settings
+  - `GetBrowserExecutableFolder()` — override to use a fixed-version WebView2 runtime
+  - `GetEnvironmentOptions()` — override to provide custom environment options
+  - `GetCaptionRect()` — override to define a custom caption/drag region
+  - `ControllerCreated()` — called after the controller is created
+  - `GetNavigationErrorPage(NavigationEventArgs e)` — override the error page HTML
+  - `IsAppContentUri(string uri)` — whether a URI is the app's own content
+  - `OnPageError(string message, string? stack)` — handle page errors
+  - `SetWindowTitleFromPage(string? title)` — handle `window.__aotrino.setWindowTitle()`
+  - `TryHandleShortcut(VIRTUAL_KEY key)` — handle F11/F12 shortcuts
+  - `TryOpenDevTools()` — open DevTools on F12
+  - `GetSystemJson()` — system info JSON injected into the page
+  - `GetWindowJson()` — window info JSON injected into the page
+  - `ExcludeFromCapture()` — exclude window from screen capture
+- **JS bridge (`window.__aotrino`):**
+  - `window.__aotrino.dragWindow()` — start a window drag
+  - `window.__aotrino.closeWindow()` — close the window
+  - `window.__aotrino.minimizeWindow()` — minimize the window
+  - `window.__aotrino.maximizeWindow()` — maximize/restore the window
+  - `window.__aotrino.setWindowTitle(title)` — set the window title
+  - `window.__aotrino.getBuffer(name)` — get a shared buffer
+  - `window.__aotrino.post(json)` — post a JSON message to .NET
+  - `window.__aotrino.system` — system info (doubleClickTimeMs)
+  - `window.__aotrino.window` — window info (title)
+
+### CompositionWebViewWindow
+- **Namespace:** `AOTrino`
+- **Purpose:** Hosts the WebView as one visual in a `Windows.UI.Composition` tree.
+- Uses `ICoreWebView2CompositionController` + `RootVisualTarget`.
+- The window uses `WS_EX_NOREDIRECTIONBITMAP` (no redirection bitmap).
+- Forwards mouse/pointer input to the composition controller (since a composition-hosted WebView receives no OS input).
+- Implements `IDropTarget` for drag-and-drop.
+- **Key properties:**
+  - `CompositorController` — the compositor controller
+  - `RootVisual` — the root `SpriteVisual`
+  - `Compositor` — the `Compositor` instance
+  - `GraphicsDevice` — `CompositionGraphicsDevice?` (for Direct2D interop)
+  - `D2D1Device` — `IComObject<ID2D1Device>?` (when `UseDirect2D` is true)
+  - `IsDropTarget` — enable/disable drag-and-drop
+- **Virtual properties:**
+  - `TopMostDesktopWindowTarget` (default: `true`)
+  - `UseDirect2D` (default: `true`)
+  - `WebViewVisualTarget` — override to host the WebView in a child visual (default: `RootVisual`)
+- **Drag-and-drop events:**
+  - `OnBeforeDragEnter` / `OnAfterDragEnter`
+  - `OnBeforeDragOver` / `OnAfterDragOver`
+  - `OnBeforeDragLeave` / `OnAfterDragLeave`
+  - `OnBeforeDrop` / `OnAfterDrop`
+
+### HwndWebViewWindow
+- **Namespace:** `AOTrino`
+- **Purpose:** Hosts the WebView as a classic child window (`ICoreWebView2Controller` on the HWND).
+- The WebView renders and handles its own input directly.
+- No composition tree, no manual input forwarding.
+- Simpler and more compatible (e.g., WinForms-style interop).
+- No D3D/D2D device needed.
+
+### AOTrinoWindow
+- **Namespace:** `AOTrino`
+- **Purpose:** Ready-to-use application window that navigates to the extracted WebRoot once the controller is ready.
+- Derives from `CompositionWebViewWindow`.
+- **Key properties:**
+  - `VirtualHostName` — when set, serves the WebRoot over `https://{VirtualHostName}/index.html` instead of `file://` (solves CORS issues with ES modules)
+  - `StartUrl` — the URL to navigate to (defaults to the WebRoot index.html)
+  - `NavigationMode` — `NavigationMode.Local` (default) or `NavigationMode.Web`
+- **Navigation modes:**
+  - `Local` — the window stays on the app's own content; off-app links open in the default browser
+  - `Web` — the window becomes a full browser (context menus, status bar, accelerator keys, error pages all enabled)
+- **Key methods:**
+  - `RegisterHostObjects()` — override to expose JS-callable host objects
+  - `IsNavigationAllowed(Uri uri)` — override for a custom allow-list
+  - `OpenExternal(Uri uri)` — open a URI in the default OS handler
+  - `MapVirtualHost()` — map the virtual host name to the WebRoot folder
+- **Virtual properties controlled by NavigationMode:**
+  - `AreDefaultContextMenusEnabled` — `true` in Web mode
+  - `IsStatusBarEnabled` — `true` in Web mode
+  - `AreBrowserAcceleratorKeysEnabled` — `true` in Web mode
+  - `IsBuiltInErrorPageEnabled` — `true` in Web mode
+  - `ReplacesNavigationErrorPage` — `false` in Web mode
+
+### AOTrinoApplication
+- **Namespace:** `AOTrino`
+- **Purpose:** Application lifecycle manager.
+- **Key properties:**
+  - `Current` — singleton instance
+  - `Paths` — `AOTrinoPaths` (application paths)
+  - `WebRoot` — `WebRoot` instance
+  - `BrowserExecutableFolder` — fixed-version WebView2 runtime folder
+  - `SingleInstance` — whether only one instance is allowed
+- **Key methods:**
+  - `Run()` — start the application
+  - `Shutdown()` — shut down the application
+  - `TraceInfo(string)`, `TraceWarning(string)`, `TraceError(string)` — logging
+  - `AddError(Exception, bool)` — error tracking
+
+### WebRoot
+- **Namespace:** `AOTrino`
+- **Purpose:** Manages embedded front-end files.
+- Embeds the front-end build output in the assembly and extracts it to disk at startup.
+- **Key properties:**
+  - `DistPath` — the extraction directory
+  - `IndexFilePath` — full path to `index.html`
+  - `IndexFileName` — the index file name (default: `index.html`)
+- **Key methods:**
+  - `EnsureFilesAsync()` — extract embedded files to disk
+
+### NavigationMode
+- **Namespace:** `AOTrino`
+- **Values:**
+  - `Local` — app content only, off-app links open externally
+  - `Web` — full browser behavior
+
+---
+
+## Host Object Bridge (.NET <-> JS)
+
+AOTrino uses WebView2's `AddHostObjectToScript` to expose .NET objects to JavaScript.
+
+### .NET Side
+```csharp
+// In your AOTrinoWindow subclass:
+protected override void RegisterHostObjects()
+{
+    var myApi = new MyApi();
+    AddHostObject("myApi", myApi);
+}
+
+// A host object must derive from DispatchObject:
+public class MyApi : DispatchObject
+{
+    public string GetData() => "Hello from .NET!";
+    
+    public async Task<string> GetDataAsync() => await Task.FromResult("Async hello!");
+    
+    public int Add(int a, int b) => a + b;
+}
+```
+
+### JS Side
+```javascript
+// Async access (returns a Promise):
+const data = await chrome.webview.hostObjects.myApi.getData();
+
+// Sync access (returns immediately):
+const data = chrome.webview.hostObjects.sync.myApi.getData();
+
+// Note: sync access requires the undocumented ICoreWebView2PrivatePartial interface
+// which AOTrino attempts to use automatically.
+```
+
+---
+
+## Shared Buffer Transport
+
+AOTrino provides a shared-memory channel between .NET and JS for high-throughput data transfer (e.g., video frames, large datasets).
+
+### .NET Side
+```csharp
+var buffer = CreateSharedBuffer("myBuffer");
+// Write to buffer.Pointer (IntPtr)
+```
+
+### JS Side
+```javascript
+const buffer = window.__aotrino.getBuffer('myBuffer');
+// buffer is a SharedArrayBuffer or ArrayBuffer
+```
+
+---
+
+## Window Commands from JS
+
+The `window.__aotrino` object provides built-in window controls:
+
+```javascript
+// Drag the window (call from mousedown on a custom title bar)
+window.__aotrino.dragWindow();
+
+// Close the window
+window.__aotrino.closeWindow();
+
+// Minimize
+window.__aotrino.minimizeWindow();
+
+// Maximize or restore
+window.__aotrino.maximizeWindow();
+
+// Set the window title
+window.__aotrino.setWindowTitle('My App Title');
+
+// Post a JSON message to .NET
+window.__aotrino.post({ type: 'custom', data: 'hello' });
+```
+
+---
+
+## Page Error Handling
+
+Unhandled JavaScript errors in the page are automatically forwarded to .NET:
+
+```csharp
+protected override void OnPageError(string message, string? stack)
+{
+    // Log, show in UI, or ignore
+    AOTrinoApplication.Current?.TraceError($"page error: {message}");
+}
+```
+
+---
+
+## File Drop Support
+
+### CompositionWebViewWindow
+The composition host implements `IDropTarget` and forwards drag-and-drop to the WebView via `ICoreWebView2CompositionController3`.
+
+### WebViewWindow (file drops from Explorer)
+```csharp
+protected override bool AcceptsFileDrops => true;
+
+protected override DROPEFFECT GetFileDropEffect(DROPEFFECT allowedEffects)
+    => allowedEffects.HasFlag(DROPEFFECT.DROPEFFECT_COPY) ? DROPEFFECT.DROPEFFECT_COPY : DROPEFFECT.DROPEFFECT_NONE;
+
+protected internal override void OnFilesDropped(FileDropEventArgs e)
+{
+    // e.Files contains the real file paths
+    foreach (var file in e.Files)
+    {
+        Console.WriteLine($"File dropped: {file}");
+    }
+}
+```
+
+---
+
+## System Backdrop (Windows 11)
+
+```csharp
+// Apply Mica backdrop
+window.SetSystemBackdrop(DWM_SYSTEMBACKDROP_TYPE.DWMSBT_MAINWINDOW);
+
+// Apply Acrylic backdrop
+window.SetSystemBackdrop(DWM_SYSTEMBACKDROP_TYPE.DWMSBT_TRANSIENTWINDOW);
+
+// Apply Tabbed backdrop
+window.SetSystemBackdrop(DWM_SYSTEMBACKDROP_TYPE.DWMSBT_TABBEDWINDOW);
+```
+
+---
+
+## Virtual Host (CORS-free ES Modules)
+
+When your front-end uses ES modules (e.g., Vite/React build output), `file://` pages have an opaque origin and CORS blocks module loading. Use a virtual host:
+
+```csharp
+protected override string? VirtualHostName => "myapp.local";
+```
+
+This serves the WebRoot over `https://myapp.local/index.html`, giving the page a normal `https` origin so ES modules work without `--allow-file-access-from-files`.
+
+---
+
+## Typical Application Structure
+
+```
+MyApp/
+├── MyApp.csproj          # <Project Sdk="Microsoft.NET.Sdk">
+├── Program.cs            # Entry point
+├── MyAppWindow.cs        # Window class (derives from AOTrinoWindow)
+├── MyApi.cs              # Host object (derives from DispatchObject)
+├── wwwroot/              # Front-end files (embedded via AOTrinoEmbedWebRoot)
+│   ├── index.html
+│   ├── assets/
+│   └── ...
+└── Properties/
+    └── launchSettings.json
+```
+
+### Program.cs
+```csharp
+using AOTrino;
+
+class Program
+{
+    static void Main()
+    {
+        using var app = new MyApp();
+        app.Run();
+    }
+}
+
+class MyApp : AOTrinoApplication
+{
+    protected override void OnStartup()
+    {
+        var window = new MyAppWindow();
+        window.Show();
+    }
+}
+```
+
+### MyAppWindow.cs
+```csharp
+using AOTrino;
+
+class MyAppWindow : AOTrinoWindow
+{
+    public MyAppWindow() : base(title: "My App")
+    {
+    }
+
+    protected override void RegisterHostObjects()
+    {
+        AddHostObject("api", new MyApi());
+    }
+}
+```
+
+### MyApi.cs
+```csharp
+using AOTrino.Bridge;
+
+public class MyApi : DispatchObject
+{
+    public string Greet(string name) => $"Hello, {name}!";
+}
+```
+
+---
+
+## CSProj Configuration
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+    <PublishAot>true</PublishAot>
+    <SelfContained>true</SelfContained>
+    <Platforms>x86;x64;ARM64</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AOTrino" Version="1.1.1" />
+  </ItemGroup>
+
+  <!-- Embed the front-end build output -->
+  <PropertyGroup>
+    <AOTrinoEmbedWebRoot>true</AOTrinoEmbedWebRoot>
+    <AOTrinoWebRootSource>wwwroot</AOTrinoWebRootSource>
+  </PropertyGroup>
+</Project>
+```
+
+---
+
+## Key NuGet Dependencies
+
+- **DirectN** — DirectX interop (D3D11, D2D1, DXGI, COM)
+- **DirectN.Extensions** — Higher-level DirectN utilities
+- **WebView2** — WebView2 COM interop (Microsoft.Web.WebView2.Core)
+- **WinRT** — Windows Runtime interop (Windows.UI.Composition, etc.)
+- **Windows.Foundation**, **Windows.Graphics**, **Windows.UI** — WinRT projections
+
+---
+
+## Build Output
+
+- Single-file executable (Native AOT)
+- Platforms: `x86`, `x64`, `ARM64`
+- The front-end files are embedded in the assembly and extracted at startup
+- The WebView2 runtime is NOT bundled (uses the evergreen runtime by default, or a fixed-version runtime path)
+
+---
+
+## Threading Model
+
+- The window runs on an STA thread (required for COM and drag-and-drop)
+- WebView2 callbacks arrive on the UI thread
+- `AOTrinoApplication` provides a synchronization context for `await` to resume on the UI thread
+- Host object methods run on the UI thread by default
+
+---
+
+## Error Handling
+
+- WebView2 COM errors are thrown via `.ThrowOnError()`
+- Navigation errors show a custom error page (override `GetNavigationErrorPage`)
+- Page errors (unhandled JS exceptions) are forwarded to `OnPageError`
+- Application-level errors are tracked via `AOTrinoApplication.AddError`
+
+---
+
+## Security Notes
+
+- By default, the window stays on the app's own content (`NavigationMode.Local`)
+- Off-app navigations are opened in the default browser
+- The virtual host uses `DENY_CORS` access kind (only the page's own origin is allowed)
+- The window can be excluded from screen capture via `ExcludeFromCapture()`
+- Host objects are only accessible from the page's origin

@@ -25,29 +25,30 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 25px;
-    background: radial-gradient(circle at top,#44475a,#282a36 65%);
+    padding: 5px;
+    background:transparent;
     color: var(--text);
     font-family: Inter,system-ui,sans-serif;
+    border-radius:0;
 }
 
 .container {
     width: 100%;
-    max-width: 1280px;
-    height: 90vh;
+    max-width: 100vw;
+    height: 97.5vh;
     display: flex;
     flex-direction: column;
     background: linear-gradient(145deg,rgba(255,255,255,.04),rgba(255,255,255,.01)),var(--panel);
     backdrop-filter: blur(20px);
     border: 1px solid var(--border);
-    border-radius: 22px;
+    border-radius: 5px;
     overflow: hidden;
     box-shadow: 0 35px 90px rgba(0,0,0,.75);
 }
 
 header {
-    height: 75px;
-    padding: 0 30px;
+    height:50px !important;
+    padding: 0 15px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -67,7 +68,7 @@ h2 {
     align-items: center;
     gap: 10px;
     font-family: "JetBrains Mono",monospace;
-    font-size: 15px;
+    font-size: 1rem;
     letter-spacing: 1px;
 }
 
@@ -117,6 +118,7 @@ h2 {
     padding: 25px;
     font-family: "JetBrains Mono",monospace;
     font-size: 14px;
+    
 }
 
     #log > div {
@@ -126,6 +128,7 @@ h2 {
         line-height: 1.7;
         white-space: pre-wrap;
         animation: appear .25s ease;
+        
     }
 
 @keyframes appear {
@@ -144,6 +147,10 @@ h2 {
     background: rgba(139,233,253,.1);
     border-left: 4px solid #8be9fd;
     color: #8be9fd;
+}
+
+.user-msg:first-child {
+    margin-top: 5rem !important; /* to be modified to allow log messages to be displayed properly */
 }
 
 .thought {

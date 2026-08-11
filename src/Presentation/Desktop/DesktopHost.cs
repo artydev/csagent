@@ -34,7 +34,7 @@ internal static class DesktopHost
             using var app = new AOTrinoApplication();
             // Must be registered before creating the window, otherwise the window will not be able to use the AOTrino runtime.
             using var window = new CsAgentWindow(args);
-            window.ResizeClient(1200, 800);
+            window.ResizeClient(1280, 800);
             window.Center();
             window.Show();
             app.Run();
@@ -59,6 +59,33 @@ internal partial class CsAgentWindow : AOTrinoWindow
         : base(Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyTitleAttribute>()!.Title)
     {
         _args = args;
+    }
+
+    protected override void ControllerCreated()
+    {
+
+        if (RootVisual != null)
+        {
+            var compositor = Compositor;
+            if (compositor != null)
+            {
+                var  brush =  compositor.CreateColorBrush(new Windows.UI.Color { A = 255, R = 20, G = 20, B = 60 });
+            }
+            
+        }
+
+        if (BaseController is ICoreWebView2Controller2 controller2)
+        {
+            controller2.put_DefaultBackgroundColor(new COREWEBVIEW2_COLOR
+            {
+                A = 255,
+                R = 20,
+                G = 20,
+                B = 60,
+            });
+        }
+
+        base.ControllerCreated();
     }
 
     protected override void RegisterHostObjects() => AddHostObject("dotnet", new DesktopAPI(this));

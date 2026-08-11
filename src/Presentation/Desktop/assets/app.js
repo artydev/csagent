@@ -405,10 +405,9 @@ function startChatStream(prompt, log) {
 
 
 
-
-async function startDesktopChat(prompt, log) {
-    let q = await d.MachineName
-    alert("MachineName: " + q)
+function startDesktopChat(prompt, log) {
+    let exe_path = d.ExePath
+    document.getElementById("log").innerHTML = `<b>Environment.ProcessPath: ${exe_path}</b>`
 }
 
 // -----------------------------------------------------------------------------
@@ -422,9 +421,9 @@ async function startDesktopChat(prompt, log) {
 
 // capture JS console.* into .NET → routes to AOTrinoApplication.Trace* (see HostApi.OnConsoleLog)
 if (window.chrome && chrome.webview && chrome.webview.hostObjects) {
-  
+
     const dotnet = chrome.webview.hostObjects.dotnet; // async proxy, fire-and-forget
-   
+
     for (const level of ["log", "info", "warn", "error", "debug"]) {
         const orig = console[level].bind(console);
         console[level] = (...args) => {
@@ -437,7 +436,7 @@ if (window.chrome && chrome.webview && chrome.webview.hostObjects) {
 
 const sync = () => chrome.webview.hostObjects.sync.dotnet;
 const async = () => chrome.webview.hostObjects.dotnet;
-const d = async();
+const d = sync();
 
 function run() {
     const input = document.getElementById("in");
@@ -450,5 +449,7 @@ function run() {
     input.value = "";
     scrollToBottom(log);
 
-    startDesktopChat(prompt, log);
+
 }
+
+startDesktopChat(prompt, log);

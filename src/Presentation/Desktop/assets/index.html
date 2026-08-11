@@ -39,25 +39,26 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-php.min.js"></script>
 
 </head>
-<body>
+<body style="background-color: #1e1e1e; color: #d4d4d4;">
+    
     <div class="container">
-        <header data-aotrino-drag>
+        <header data-aotrino-drag  style="cursor:grab">
             <div class="brand">
                 <h2>
                     <span class="status-dot"></span>
-                    CSAgent
+                   
                     <span class="version">v0.3</span>
                 </h2>
             </div>
             <div>
-                <h1>CSAgent Desktop</h1>
+                <h4>CSAgent Desktop</h4>
             </div>
             <div class="status">
                 <span class="status-dot"></span>
                 <span id="step-counter">Ready</span>
             </div>
         </header>
-        <div id="log"></div>
+        <div id="log" style="line-height:4rem;  color:mediumvioletred;font-size:1rem;font-family:'Segoe UI'"></div>
         <div class="input-area">
             <input id="in"
                    autocomplete="off"
