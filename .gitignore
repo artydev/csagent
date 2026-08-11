@@ -434,3 +434,4 @@ FodyWeavers.xsd
 *.msp
 /agent_memory.json
 *.il
+/src/Presentation/Desktop/assets/app - Copier.js
