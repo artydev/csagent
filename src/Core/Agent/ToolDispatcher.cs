@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -114,6 +115,17 @@ public static class ToolDispatcher
 
                 "sh" => await RunShellAsync(
                     args["cmd"]!.GetValue<string>(), isWindows),
+
+                "http_request" => await HttpRequestAsync(
+                    args["url"]!.GetValue<string>(),
+                    args["method"]?.GetValue<string>() ?? "GET",
+                    args["headers"] as JsonObject,
+                    args["body"]?.GetValue<string>(),
+                    args["timeoutMs"]?.GetValue<int>() ?? 30_000),
+
+                "web_search" => await WebSearchAsync(
+                    args["query"]!.GetValue<string>(),
+                    args["maxResults"]?.GetValue<int>() ?? 5),
 
                 "switch_model" => SwitchModel(
                     args["model"]!.GetValue<string>(),
@@ -429,6 +441,39 @@ public static class ToolDispatcher
                   "cmd": { "type": "string", "description": "Shell command to run." }
                 },
                 "required": ["cmd"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "http_request",
+              "description": "Make an HTTP request to a URL and return the status, headers, and body. Use this to call web APIs or fetch remote resources.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "url":       { "type": "string", "description": "The absolute http/https URL to request." },
+                  "method":    { "type": "string", "description": "HTTP method: GET, POST, PUT, PATCH, DELETE, etc. Defaults to GET." },
+                  "headers":   { "type": "object", "description": "Optional request headers as a JSON object of string values." },
+                  "body":      { "type": "string", "description": "Optional request body (sent for POST/PUT/PATCH)." },
+                  "timeoutMs": { "type": "integer", "description": "Timeout in milliseconds. Defaults to 30000, max 120000." }
+                },
+                "required": ["url"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "web_search",
+              "description": "Search the web for docs, errors, or solutions. Returns a list of ranked results with titles, URLs, and snippets.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "query":      { "type": "string",  "description": "The search query text." },
+                  "maxResults": { "type": "integer", "description": "Maximum number of results to return. Defaults to 5, max 10." }
+                },
+                "required": ["query"]
               }
             }
           },
@@ -1222,6 +1267,174 @@ public static class ToolDispatcher
                 : prefix + output;
         }
         catch (Exception ex) { return $"Shell error: {ex.Message}"; }
+    }
+
+    // ── http_request ─────────────────────────────────────────────────────────
+
+    private static async Task<string> HttpRequestAsync(
+        string url,
+        string method,
+        JsonObject? headers,
+        string? body,
+        int timeoutMs)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return "Error: http_request - 'url' argument is required.";
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                return $"Error: http_request - invalid URL '{url}'. Only http/https URLs are allowed.";
+
+            if (timeoutMs < 1) timeoutMs = 1;
+            if (timeoutMs > 120_000) timeoutMs = 120_000;
+
+            using var client = new HttpClient { Timeout = TimeSpan.FromMilliseconds(timeoutMs) };
+
+            using var request = new HttpRequestMessage(new HttpMethod(method.ToUpperInvariant()), uri);
+
+            if (headers is not null)
+            {
+                foreach (var kvp in headers)
+                {
+                    if (kvp.Value is null) continue;
+                    var value = kvp.Value.GetValue<string>();
+                    if (string.IsNullOrWhiteSpace(value)) continue;
+
+                    // Content headers must be set on the content, not the request.
+                    if (kvp.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    if (!request.Headers.TryAddWithoutValidation(kvp.Key, value))
+                        return $"Error: http_request - invalid header '{kvp.Key}'.";
+                }
+            }
+
+            if (!string.IsNullOrEmpty(body))
+            {
+                var contentType = "application/json";
+                if (headers is not null && headers["Content-Type"] is JsonValue ct)
+                    contentType = ct.GetValue<string>();
+
+                request.Content = new StringContent(body, Encoding.UTF8, contentType);
+            }
+
+            using var response = await client.SendAsync(request);
+            var responseBody = await response.Content.ReadAsStringAsync();
+
+            var sb = new StringBuilder();
+            sb.AppendLine($"Status: {(int)response.StatusCode} {response.ReasonPhrase}");
+            sb.AppendLine($"Headers:");
+            foreach (var h in response.Headers)
+                sb.AppendLine($"  {h.Key}: {string.Join(", ", h.Value)}");
+            sb.AppendLine($"Body:");
+            sb.Append(responseBody);
+
+            return sb.ToString().TrimEnd();
+        }
+        catch (TaskCanceledException)
+        {
+            return $"Error: http_request - request to '{url}' timed out after {timeoutMs} ms.";
+        }
+        catch (HttpRequestException ex)
+        {
+            return $"Error: http_request - {ex.Message}";
+        }
+        catch (Exception ex) { return $"Error: http_request — {ex.Message}"; }
+    }
+
+    // ── web_search ───────────────────────────────────────────────────────────
+
+    private static async Task<string> WebSearchAsync(string query, int maxResults)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(query))
+                return "Error: web_search - 'query' argument is required.";
+
+            if (maxResults < 1) maxResults = 1;
+            if (maxResults > 10) maxResults = 10;
+
+            // DuckDuckGo Instant Answer API — free, no API key required.
+            var url = "https://api.duckduckgo.com/?q=" + Uri.EscapeDataString(query) +
+                      "&format=json&no_html=1&skip_disambig=1";
+
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("CsAgentUI/1.0");
+
+            var json = await client.GetStringAsync(url);
+            var root = JsonNode.Parse(json);
+
+            var sb = new StringBuilder();
+            var count = 0;
+
+            // Abstract answer (if present) is the most relevant result.
+            var abstractText = root?["Abstract"]?.GetValue<string>();
+            var abstractUrl = root?["AbstractURL"]?.GetValue<string>();
+            if (!string.IsNullOrWhiteSpace(abstractText))
+            {
+                sb.AppendLine($"[Abstract] {abstractText}");
+                if (!string.IsNullOrWhiteSpace(abstractUrl))
+                    sb.AppendLine($"  URL: {abstractUrl}");
+                sb.AppendLine();
+                count++;
+            }
+
+            // Related topics.
+            if (root?["RelatedTopics"] is JsonArray topics)
+            {
+                foreach (var topic in topics)
+                {
+                    if (count >= maxResults) break;
+
+                    if (topic is JsonObject obj)
+                    {
+                        var text = obj["Text"]?.GetValue<string>();
+                        var firstUrl = obj["FirstURL"]?.GetValue<string>();
+                        if (string.IsNullOrWhiteSpace(text)) continue;
+
+                        sb.AppendLine($"{count + 1}. {text}");
+                        if (!string.IsNullOrWhiteSpace(firstUrl))
+                            sb.AppendLine($"   URL: {firstUrl}");
+                        sb.AppendLine();
+                        count++;
+                    }
+                    else if (topic is JsonObject nested && nested["Topics"] is JsonArray subTopics)
+                    {
+                        foreach (var sub in subTopics)
+                        {
+                            if (count >= maxResults) break;
+                            if (sub is not JsonObject subObj) continue;
+
+                            var text = subObj["Text"]?.GetValue<string>();
+                            var firstUrl = subObj["FirstURL"]?.GetValue<string>();
+                            if (string.IsNullOrWhiteSpace(text)) continue;
+
+                            sb.AppendLine($"{count + 1}. {text}");
+                            if (!string.IsNullOrWhiteSpace(firstUrl))
+                                sb.AppendLine($"   URL: {firstUrl}");
+                            sb.AppendLine();
+                            count++;
+                        }
+                    }
+                }
+            }
+
+            if (count == 0)
+                return $"No results found for '{query}'.";
+
+            return sb.ToString().TrimEnd();
+        }
+        catch (TaskCanceledException)
+        {
+            return $"Error: web_search - request timed out for query '{query}'.";
+        }
+        catch (HttpRequestException ex)
+        {
+            return $"Error: web_search - {ex.Message}";
+        }
+        catch (Exception ex) { return $"Error: web_search — {ex.Message}"; }
     }
 
     // ── switch_model ─────────────────────────────────────────────────────────
