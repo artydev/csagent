@@ -59,6 +59,17 @@ public static class ToolDispatcher
                     args["path"]!.GetValue<string>(),
                     args["edits"]),
 
+                "copy_file" => CopyFile(
+                    args["source"]!.GetValue<string>(),
+                    args["destination"]!.GetValue<string>()),
+
+                "move_file" => MoveFile(
+                    args["source"]!.GetValue<string>(),
+                    args["destination"]!.GetValue<string>()),
+
+                "delete_file" => DeleteFile(
+                    args["path"]!.GetValue<string>()),
+
                 "git_status" => await GitStatusAsync(
                     args["path"]?.GetValue<string>() ?? "."),
 
@@ -96,7 +107,8 @@ public static class ToolDispatcher
     /// <summary>
     /// Returns true if the tool name is considered destructive (requires user confirmation).
     /// </summary>
-    public static bool IsDestructive(string name) => name is "write_file" or "edit_file" or "git_commit";
+    public static bool IsDestructive(string name) =>
+        name is "write_file" or "edit_file" or "git_commit" or "move_file" or "delete_file";
 
     /// <summary>
     /// The JSON tool definitions for the LLM API.
@@ -186,6 +198,50 @@ public static class ToolDispatcher
                   }
                 },
                 "required": ["path", "edits"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "copy_file",
+              "description": "Copy a file from source to destination. Parent directories of the destination are created automatically.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "source":      { "type": "string", "description": "Path of the file to copy." },
+                  "destination": { "type": "string", "description": "Destination path for the copy." }
+                },
+                "required": ["source", "destination"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "move_file",
+              "description": "Move (rename) a file from source to destination. Parent directories of the destination are created automatically. Destructive — requires user confirmation.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "source":      { "type": "string", "description": "Path of the file to move." },
+                  "destination": { "type": "string", "description": "Destination path for the move." }
+                },
+                "required": ["source", "destination"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "delete_file",
+              "description": "Permanently delete a file. Destructive — requires user confirmation.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path": { "type": "string", "description": "Path of the file to delete." }
+                },
+                "required": ["path"]
               }
             }
           },
@@ -477,6 +533,64 @@ public static class ToolDispatcher
             return $"OK: applied {applied.Count} edit(s) to '{full}'.";
         }
         catch (Exception ex) { return $"Error: edit_file — {ex.Message}"; }
+    }
+
+    // ── copy_file / move_file / delete_file ─────────────────────────────────
+
+    private static string CopyFile(string source, string destination)
+    {
+        try
+        {
+            var srcFull = Path.GetFullPath(source);
+            var dstFull = Path.GetFullPath(destination);
+            if (!IsSafePath(srcFull) || !IsSafePath(dstFull))
+                return $"Error: copy_file - Paths must be inside the current working directory.";
+
+            if (!File.Exists(srcFull)) return $"Error: copy_file - source not found '{srcFull}'";
+
+            var dir = Path.GetDirectoryName(dstFull);
+            if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
+
+            File.Copy(srcFull, dstFull, overwrite: true);
+            return $"OK: copied '{srcFull}' -> '{dstFull}' ({Sz(new FileInfo(dstFull).Length)})";
+        }
+        catch (Exception ex) { return $"Error: copy_file — {ex.Message}"; }
+    }
+
+    private static string MoveFile(string source, string destination)
+    {
+        try
+        {
+            var srcFull = Path.GetFullPath(source);
+            var dstFull = Path.GetFullPath(destination);
+            if (!IsSafePath(srcFull) || !IsSafePath(dstFull))
+                return $"Error: move_file - Paths must be inside the current working directory.";
+
+            if (!File.Exists(srcFull)) return $"Error: move_file - source not found '{srcFull}'";
+
+            var dir = Path.GetDirectoryName(dstFull);
+            if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
+
+            File.Move(srcFull, dstFull, overwrite: true);
+            return $"OK: moved '{srcFull}' -> '{dstFull}'";
+        }
+        catch (Exception ex) { return $"Error: move_file — {ex.Message}"; }
+    }
+
+    private static string DeleteFile(string path)
+    {
+        try
+        {
+            var full = Path.GetFullPath(path);
+            if (!IsSafePath(full))
+                return $"Error: delete_file - Path '{full}' is not allowed for deletion. Only files in the current working directory are permitted.";
+
+            if (!File.Exists(full)) return $"Error: delete_file - not found '{full}'";
+
+            File.Delete(full);
+            return $"OK: deleted '{full}'";
+        }
+        catch (Exception ex) { return $"Error: delete_file — {ex.Message}"; }
     }
 
     // ── git_* tools ──────────────────────────────────────────────────────────
