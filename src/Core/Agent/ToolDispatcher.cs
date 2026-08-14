@@ -59,6 +59,24 @@ public static class ToolDispatcher
                     args["path"]!.GetValue<string>(),
                     args["edits"]),
 
+                "git_status" => await GitStatusAsync(
+                    args["path"]?.GetValue<string>() ?? "."),
+
+                "git_diff" => await GitDiffAsync(
+                    args["path"]?.GetValue<string>() ?? ".",
+                    args["staged"]?.GetValue<bool>() ?? false),
+
+                "git_log" => await GitLogAsync(
+                    args["path"]?.GetValue<string>() ?? ".",
+                    args["count"]?.GetValue<int>() ?? 20),
+
+                "git_branch" => await GitBranchAsync(
+                    args["path"]?.GetValue<string>() ?? "."),
+
+                "git_commit" => await GitCommitAsync(
+                    args["path"]?.GetValue<string>() ?? ".",
+                    args["message"]!.GetValue<string>()),
+
                 "sh" => await RunShellAsync(
                     args["cmd"]!.GetValue<string>(), isWindows),
 
@@ -78,7 +96,7 @@ public static class ToolDispatcher
     /// <summary>
     /// Returns true if the tool name is considered destructive (requires user confirmation).
     /// </summary>
-    public static bool IsDestructive(string name) => name is "write_file" or "edit_file";
+    public static bool IsDestructive(string name) => name is "write_file" or "edit_file" or "git_commit";
 
     /// <summary>
     /// The JSON tool definitions for the LLM API.
@@ -168,6 +186,79 @@ public static class ToolDispatcher
                   }
                 },
                 "required": ["path", "edits"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "git_status",
+              "description": "Show the working tree status (modified, staged, untracked files) of the git repository containing the given path.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path": { "type": "string", "description": "Directory inside the git repo. Defaults to '.'." }
+                },
+                "required": []
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "git_diff",
+              "description": "Show uncommitted changes. By default shows unstaged changes; set 'staged' to true to show staged (index) changes.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path":  { "type": "string", "description": "Directory inside the git repo. Defaults to '.'." },
+                  "staged": { "type": "boolean", "description": "If true, show staged changes instead of unstaged. Defaults to false." }
+                },
+                "required": []
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "git_log",
+              "description": "Show the recent commit history of the git repository.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path":  { "type": "string", "description": "Directory inside the git repo. Defaults to '.'." },
+                  "count": { "type": "integer", "description": "Number of commits to show. Defaults to 20." }
+                },
+                "required": []
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "git_branch",
+              "description": "Show the current branch and list all local branches of the git repository.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path": { "type": "string", "description": "Directory inside the git repo. Defaults to '.'." }
+                },
+                "required": []
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "git_commit",
+              "description": "Stage all changes and create a commit with the given message. Destructive — requires user confirmation.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path":    { "type": "string", "description": "Directory inside the git repo. Defaults to '.'." },
+                  "message": { "type": "string", "description": "Commit message." }
+                },
+                "required": ["message"]
               }
             }
           },
@@ -386,6 +477,108 @@ public static class ToolDispatcher
             return $"OK: applied {applied.Count} edit(s) to '{full}'.";
         }
         catch (Exception ex) { return $"Error: edit_file — {ex.Message}"; }
+    }
+
+    // ── git_* tools ──────────────────────────────────────────────────────────
+
+    private static async Task<string> GitStatusAsync(string path)
+    {
+        var full = Path.GetFullPath(path);
+        if (!IsSafePath(full))
+            return $"Error: git_status - Path '{full}' is not allowed. Only paths in the current working directory are permitted.";
+
+        return await RunGitAsync(full, "status --short --branch");
+    }
+
+    private static async Task<string> GitDiffAsync(string path, bool staged)
+    {
+        var full = Path.GetFullPath(path);
+        if (!IsSafePath(full))
+            return $"Error: git_diff - Path '{full}' is not allowed. Only paths in the current working directory are permitted.";
+
+        var args = staged ? "diff --cached" : "diff";
+        return await RunGitAsync(full, args);
+    }
+
+    private static async Task<string> GitLogAsync(string path, int count)
+    {
+        var full = Path.GetFullPath(path);
+        if (!IsSafePath(full))
+            return $"Error: git_log - Path '{full}' is not allowed. Only paths in the current working directory are permitted.";
+
+        if (count < 1) count = 1;
+        if (count > 100) count = 100;
+        return await RunGitAsync(full, $"log --oneline -n {count}");
+    }
+
+    private static async Task<string> GitBranchAsync(string path)
+    {
+        var full = Path.GetFullPath(path);
+        if (!IsSafePath(full))
+            return $"Error: git_branch - Path '{full}' is not allowed. Only paths in the current working directory are permitted.";
+
+        return await RunGitAsync(full, "branch --list");
+    }
+
+    private static async Task<string> GitCommitAsync(string path, string message)
+    {
+        var full = Path.GetFullPath(path);
+        if (!IsSafePath(full))
+            return $"Error: git_commit - Path '{full}' is not allowed. Only paths in the current working directory are permitted.";
+
+        if (string.IsNullOrWhiteSpace(message))
+            return "Error: git_commit - 'message' argument is required.";
+
+        // Stage all changes, then commit.
+        var addResult = await RunGitAsync(full, "add -A");
+        if (addResult.StartsWith("Error", StringComparison.OrdinalIgnoreCase))
+            return addResult;
+
+        var commitResult = await RunGitAsync(full, $"commit -m \"{message.Replace("\"", "\\\"")}\"");
+        return commitResult;
+    }
+
+    /// <summary>
+    /// Runs a git command in the given working directory and returns its output.
+    /// </summary>
+    private static async Task<string> RunGitAsync(string workingDir, string gitArgs)
+    {
+        try
+        {
+            using var proc = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "git",
+                    Arguments = gitArgs,
+                    WorkingDirectory = workingDir,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    StandardOutputEncoding = Encoding.UTF8,
+                    StandardErrorEncoding = Encoding.UTF8
+                }
+            };
+
+            proc.Start();
+            var outTask = proc.StandardOutput.ReadToEndAsync();
+            var errTask = proc.StandardError.ReadToEndAsync();
+            var waitTask = proc.WaitForExitAsync();
+
+            if (await Task.WhenAny(waitTask, Task.Delay(ShellTimeoutMs)) != waitTask)
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+                return "Error: git command timed out (60s).";
+            }
+
+            var output = ((await outTask) + (await errTask)).Trim();
+            var prefix = proc.ExitCode == 0 ? $"OK (exit 0):\n" : $"Error (exit {proc.ExitCode}):\n";
+            return string.IsNullOrWhiteSpace(output)
+                ? prefix.TrimEnd()
+                : prefix + output;
+        }
+        catch (Exception ex) { return $"Git error: {ex.Message}"; }
     }
 
     // ── sh ───────────────────────────────────────────────────────────────────
