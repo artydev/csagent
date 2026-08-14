@@ -55,6 +55,10 @@ public static class ToolDispatcher
                     args["path"]?.GetValue<string>() ?? ".",
                     args["glob"]?.GetValue<string>() ?? "*"),
 
+                "edit_file" => EditFile(
+                    args["path"]!.GetValue<string>(),
+                    args["edits"]),
+
                 "sh" => await RunShellAsync(
                     args["cmd"]!.GetValue<string>(), isWindows),
 
@@ -74,7 +78,7 @@ public static class ToolDispatcher
     /// <summary>
     /// Returns true if the tool name is considered destructive (requires user confirmation).
     /// </summary>
-    public static bool IsDestructive(string name) => name is "write_file";
+    public static bool IsDestructive(string name) => name is "write_file" or "edit_file";
 
     /// <summary>
     /// The JSON tool definitions for the LLM API.
@@ -138,6 +142,32 @@ public static class ToolDispatcher
                   "glob":    { "type": "string", "description": "Optional file glob filter, e.g. '*.cs' or '*.js'. Defaults to '*'." }
                 },
                 "required": ["pattern"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "edit_file",
+              "description": "Apply precise find-and-replace edits to an existing text file without rewriting the whole file. Provide an array of edits, each with an 'old_string' (exact text to find, must appear exactly once) and a 'new_string' (replacement). All edits are applied atomically; if any edit fails, no changes are written.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path": { "type": "string", "description": "File path to edit." },
+                  "edits": {
+                    "type": "array",
+                    "description": "List of edits to apply. Each edit replaces an exact old_string with a new_string.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "old_string": { "type": "string", "description": "Exact text to find. Must appear exactly once in the file." },
+                        "new_string": { "type": "string", "description": "Replacement text." }
+                      },
+                      "required": ["old_string", "new_string"]
+                    }
+                  }
+                },
+                "required": ["path", "edits"]
               }
             }
           },
@@ -305,6 +335,57 @@ public static class ToolDispatcher
                 : sb.ToString().TrimEnd();
         }
         catch (Exception ex) { return $"Error: search_files — {ex.Message}"; }
+    }
+
+    // ── edit_file ────────────────────────────────────────────────────────────
+
+    private static string EditFile(string path, JsonNode? editsNode)
+    {
+        try
+        {
+            var full = Path.GetFullPath(path);
+            if (!IsSafePath(full))
+                return $"Error: edit_file - Path '{full}' is not allowed for editing. Only files in the current working directory are permitted.";
+
+            if (!File.Exists(full)) return $"Error: not found '{full}'";
+
+            if (editsNode is not JsonArray edits || edits.Count == 0)
+                return "Error: edit_file - 'edits' must be a non-empty array of {old_string, new_string} objects.";
+
+            var original = File.ReadAllText(full, Encoding.UTF8);
+            var working = original;
+            var applied = new List<string>();
+
+            foreach (var edit in edits)
+            {
+                if (edit is not JsonObject obj ||
+                    obj["old_string"] is not JsonValue oldVal ||
+                    obj["new_string"] is not JsonValue newVal)
+                    return "Error: edit_file - each edit must be an object with 'old_string' and 'new_string' string fields.";
+
+                var oldStr = oldVal.GetValue<string>();
+                var newStr = newVal.GetValue<string>();
+
+                if (string.IsNullOrEmpty(oldStr))
+                    return "Error: edit_file - 'old_string' cannot be empty.";
+
+                // Count occurrences in the current working text.
+                int idx = working.IndexOf(oldStr, StringComparison.Ordinal);
+                if (idx < 0)
+                    return $"Error: edit_file - 'old_string' not found in '{full}':\n{oldStr}";
+
+                if (working.IndexOf(oldStr, idx + oldStr.Length, StringComparison.Ordinal) >= 0)
+                    return $"Error: edit_file - 'old_string' appears more than once in '{full}'. Provide more context to make it unique:\n{oldStr}";
+
+                working = working.Remove(idx, oldStr.Length).Insert(idx, newStr);
+                applied.Add(oldStr);
+            }
+
+            // All edits validated — write atomically.
+            File.WriteAllText(full, working, new UTF8Encoding(false));
+            return $"OK: applied {applied.Count} edit(s) to '{full}'.";
+        }
+        catch (Exception ex) { return $"Error: edit_file — {ex.Message}"; }
     }
 
     // ── sh ───────────────────────────────────────────────────────────────────
