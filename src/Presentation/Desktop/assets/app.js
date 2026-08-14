@@ -151,6 +151,7 @@ function createToolCallMessage(name, argsJson) {
         "write_file": "📝 Write File",
         "read_file": "📖 Read File",
         "list_dir": "📂 List Directory",
+        "search_files": "🔍 Search Files",
         "sh": "💻 Shell Command",
         "switch_model": "🔄 Switch Model"
     };

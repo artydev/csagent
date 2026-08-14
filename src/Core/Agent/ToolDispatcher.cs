@@ -12,6 +12,8 @@ namespace CsAgentUI.Core.Agent;
 public static class ToolDispatcher
 {
     private const int ShellTimeoutMs = 60_000;
+    private const int MaxSearchResults = 200;
+    private const long MaxSearchFileBytes = 1_048_576; // skip binary/large files
 
     /// <summary>
     /// Delegate used by the switch_model tool to change the active model at runtime.
@@ -47,6 +49,11 @@ public static class ToolDispatcher
                 "list_dir" => ListDir(
                     args["path"]?.GetValue<string>() ?? ".",
                     args["recursive"]?.GetValue<bool>() ?? false),
+
+                "search_files" => SearchFiles(
+                    args["pattern"]!.GetValue<string>(),
+                    args["path"]?.GetValue<string>() ?? ".",
+                    args["glob"]?.GetValue<string>() ?? "*"),
 
                 "sh" => await RunShellAsync(
                     args["cmd"]!.GetValue<string>(), isWindows),
@@ -115,6 +122,22 @@ public static class ToolDispatcher
                   "recursive": { "type": "boolean", "description": "Whether to list recursively." }
                 },
                 "required": []
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "search_files",
+              "description": "Recursively search for a text pattern (grep) inside files under a directory. Returns matching file paths and line numbers. Use this to find where symbols, strings, or code are referenced.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "pattern": { "type": "string", "description": "The literal text or substring to search for (case-insensitive)." },
+                  "path":    { "type": "string", "description": "Directory to search. Defaults to '.'." },
+                  "glob":    { "type": "string", "description": "Optional file glob filter, e.g. '*.cs' or '*.js'. Defaults to '*'." }
+                },
+                "required": ["pattern"]
               }
             }
           },
@@ -218,6 +241,70 @@ public static class ToolDispatcher
             return sb.Length == 0 ? "(empty)" : sb.ToString().TrimEnd();
         }
         catch (Exception ex) { return $"Error: list_dir — {ex.Message}"; }
+    }
+
+    // ── search_files (grep) ──────────────────────────────────────────────────
+
+    private static string SearchFiles(string pattern, string path, string glob)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(pattern))
+                return "Error: search_files - 'pattern' argument is required.";
+
+            var full = Path.GetFullPath(path);
+            if (!IsSafePath(full))
+                return $"Error: search_files - Path '{full}' is not allowed for searching. Only directories in the current working directory are permitted.";
+
+            if (!Directory.Exists(full)) return $"Error: directory not found '{full}'";
+
+            var sb = new StringBuilder();
+            var count = 0;
+            var needle = pattern;
+
+            foreach (var file in Directory.EnumerateFiles(full, glob, SearchOption.AllDirectories))
+            {
+                var relPath = Path.GetRelativePath(full, file);
+                var parts = relPath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+                // Skip hidden directories (starting with '.')
+                if (parts.Any(p => p.StartsWith(".")))
+                    continue;
+
+                // Skip build output directories (bin/ and obj/)
+                if (parts.Any(p => p.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
+                                   p.Equals("obj", StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                var fi = new FileInfo(file);
+                if (fi.Length > MaxSearchFileBytes) continue;
+
+                // Skip binary files (detect null bytes in the first chunk)
+                if (IsBinaryFile(file)) continue;
+
+                string[] lines;
+                try { lines = File.ReadAllLines(file, Encoding.UTF8); }
+                catch { continue; }
+
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    if (lines[i].Contains(needle, StringComparison.OrdinalIgnoreCase))
+                    {
+                        sb.AppendLine($"{relPath}:{i + 1}: {lines[i].Trim()}");
+                        if (++count >= MaxSearchResults)
+                        {
+                            sb.AppendLine($"... (truncated at {MaxSearchResults} matches)");
+                            return sb.ToString().TrimEnd();
+                        }
+                    }
+                }
+            }
+
+            return count == 0
+                ? $"No matches for '{pattern}' under '{full}'."
+                : sb.ToString().TrimEnd();
+        }
+        catch (Exception ex) { return $"Error: search_files — {ex.Message}"; }
     }
 
     // ── sh ───────────────────────────────────────────────────────────────────
@@ -333,6 +420,37 @@ public static class ToolDispatcher
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Detects whether a file is binary by scanning the first 8 KB for null bytes
+    /// or a high proportion of non-printable characters.
+    /// </summary>
+    private static bool IsBinaryFile(string filePath)
+    {
+        try
+        {
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            var buffer = new byte[Math.Min(fs.Length, 8192)];
+            int read = fs.Read(buffer, 0, buffer.Length);
+
+            int nullCount = 0;
+            int nonPrintableCount = 0;
+            for (int i = 0; i < read; i++)
+            {
+                if (buffer[i] == 0) nullCount++;
+                else if (buffer[i] < 9 || (buffer[i] > 13 && buffer[i] < 32)) nonPrintableCount++;
+            }
+
+            // Binary if there are null bytes or a high ratio of control characters.
+            if (nullCount > 0) return true;
+            if (read > 0 && (double)nonPrintableCount / read > 0.30) return true;
+            return false;
+        }
+        catch
+        {
+            return true; // If we can't read it, treat as binary to be safe.
+        }
+    }
 
     private static string Sz(long b) =>
         b < 1024 ? $"{b} B" : b < 1_048_576 ? $"{b / 1024} KB" : $"{b / 1_048_576} MB";

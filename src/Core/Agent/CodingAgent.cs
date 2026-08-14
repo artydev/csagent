@@ -135,7 +135,7 @@ public sealed class CodingAgent : IDisposable
 
             RULES:
             - Think step-by-step before acting.
-            - Use read_file and list_dir to inspect the workspace before writing.
+            - Use read_file, list_dir and search_files to inspect the workspace before writing.
             - Use write_file for all file creation and modification.
             - Use sh for builds, tests, package installs, and system commands.
             - Use switch_model to change the active model when the user asks to switch models.
