@@ -16,6 +16,7 @@ public static class ToolDispatcher
     private const int MaxSearchResults = 200;
     private const long MaxSearchFileBytes = 1_048_576; // skip binary/large files
     private const int MaxTreeEntries = 500;            // cap tree output to avoid huge responses
+    private const int MaxParseOutputBytes = 512_000;   // cap parse_output input size
 
     /// <summary>
     /// Delegate used by the switch_model tool to change the active model at runtime.
@@ -47,6 +48,10 @@ public static class ToolDispatcher
 
                 "read_file" => ReadFile(
                     args["path"]!.GetValue<string>()),
+
+                "read_json" => ReadJson(
+                    args["path"]!.GetValue<string>(),
+                    args["query"]?.GetValue<string>()),
 
                 "list_dir" => ListDir(
                     args["path"]?.GetValue<string>() ?? ".",
@@ -83,6 +88,11 @@ public static class ToolDispatcher
                 "unzip" => Unzip(
                     args["archive"]!.GetValue<string>(),
                     args["destination"]!.GetValue<string>()),
+
+                "parse_output" => ParseOutput(
+                    args["output"]!.GetValue<string>(),
+                    args["format"]?.GetValue<string>() ?? "auto",
+                    args["query"]?.GetValue<string>()),
 
                 "git_status" => await GitStatusAsync(
                     args["path"]?.GetValue<string>() ?? "."),
@@ -153,6 +163,21 @@ public static class ToolDispatcher
                 "type": "object",
                 "properties": {
                   "path": { "type": "string", "description": "File path." }
+                },
+                "required": ["path"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "read_json",
+              "description": "Read a JSON file and return it as pretty-printed JSON. Optionally provide a 'query' (a dot-path like 'a.b[0].c') to extract just a sub-value. Use this to inspect structured data files (config, package.json, lockfiles, etc.).",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path":  { "type": "string", "description": "Path of the JSON file to read." },
+                  "query": { "type": "string", "description": "Optional dot-path to extract a sub-value, e.g. 'dependencies.react' or 'scripts[0]'." }
                 },
                 "required": ["path"]
               }
@@ -307,6 +332,22 @@ public static class ToolDispatcher
           {
             "type": "function",
             "function": {
+              "name": "parse_output",
+              "description": "Parse a block of command output into structured data and return it as pretty-printed JSON. Use 'format' to hint the format: 'json' (parse as JSON), 'keyvalue' (parse 'key=value' or 'key: value' lines), 'csv' (parse comma/tab-separated rows), or 'auto' (default, auto-detect). Optionally provide a 'query' (dot-path) to extract just a sub-value from the parsed result.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "output": { "type": "string", "description": "The raw command output text to parse." },
+                  "format": { "type": "string", "description": "Parsing format: 'json', 'keyvalue', 'csv', or 'auto' (default)." },
+                  "query":  { "type": "string", "description": "Optional dot-path to extract a sub-value from the parsed result." }
+                },
+                "required": ["output"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
               "name": "git_status",
               "description": "Show the working tree status (modified, staged, untracked files) of the git repository containing the given path.",
               "parameters": {
@@ -442,6 +483,41 @@ public static class ToolDispatcher
             return File.ReadAllText(full, Encoding.UTF8);
         }
         catch (Exception ex) { return $"Error: read_file — {ex.Message}"; }
+    }
+
+    // ── read_json ────────────────────────────────────────────────────────────
+
+    private static string ReadJson(string path, string? query)
+    {
+        try
+        {
+            var full = Path.GetFullPath(path);
+            if (!IsSafePath(full))
+                return $"Error: read_json - Path '{full}' is not allowed for reading. Only files in the current working directory are permitted.";
+
+            if (!File.Exists(full)) return $"Error: not found '{full}'";
+
+            var len = new FileInfo(full).Length;
+            if (len > 512_000) return $"Error: file too large ({len / 1024} KB). Use sh to grep/head.";
+
+            var text = File.ReadAllText(full, Encoding.UTF8);
+            JsonNode? node;
+            try { node = JsonNode.Parse(text); }
+            catch (JsonException ex) { return $"Error: read_json - invalid JSON in '{full}': {ex.Message}"; }
+
+            if (node is null) return $"Error: read_json - '{full}' contains no JSON value.";
+
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                var result = QueryJson(node, query);
+                if (result is null)
+                    return $"Error: read_json - query '{query}' not found in '{full}'.";
+                node = result;
+            }
+
+            return node.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex) { return $"Error: read_json — {ex.Message}"; }
     }
 
     // ── list_dir ─────────────────────────────────────────────────────────────
@@ -800,6 +876,204 @@ public static class ToolDispatcher
         catch (Exception ex) { return $"Error: unzip — {ex.Message}"; }
     }
 
+    // ── parse_output ─────────────────────────────────────────────────────────
+
+    private static string ParseOutput(string output, string format, string? query)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(output))
+                return "Error: parse_output - 'output' argument is required.";
+
+            if (output.Length > MaxParseOutputBytes)
+                return $"Error: parse_output - output too large ({output.Length / 1024} KB). Max is {MaxParseOutputBytes / 1024} KB.";
+
+            var fmt = (format ?? "auto").Trim().ToLowerInvariant();
+            JsonNode? parsed;
+
+            switch (fmt)
+            {
+                case "json":
+                    try { parsed = JsonNode.Parse(output); }
+                    catch (JsonException ex) { return $"Error: parse_output - invalid JSON: {ex.Message}"; }
+                    break;
+
+                case "keyvalue":
+                    parsed = ParseKeyValue(output);
+                    break;
+
+                case "csv":
+                    parsed = ParseCsv(output);
+                    break;
+
+                case "auto":
+                default:
+                    parsed = ParseAuto(output);
+                    break;
+            }
+
+            if (parsed is null)
+                return "Error: parse_output - could not parse the output into structured data.";
+
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                var result = QueryJson(parsed, query);
+                if (result is null)
+                    return $"Error: parse_output - query '{query}' not found in parsed result.";
+                parsed = result;
+            }
+
+            return parsed.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex) { return $"Error: parse_output — {ex.Message}"; }
+    }
+
+    /// <summary>
+    /// Auto-detects the format: tries JSON first, then key=value / key: value lines,
+    /// then CSV/TSV rows, and finally falls back to a plain text object.
+    /// </summary>
+    private static JsonNode? ParseAuto(string output)
+    {
+        var trimmed = output.Trim();
+
+        // 1) Try JSON.
+        try { return JsonNode.Parse(trimmed); }
+        catch { /* not JSON */ }
+
+        // 2) Try key=value / key: value lines.
+        var kv = ParseKeyValue(trimmed);
+        if (kv is JsonObject kvObj && kvObj.Count > 0)
+            return kvObj;
+
+        // 3) Try CSV/TSV rows.
+        var csv = ParseCsv(trimmed);
+        if (csv is JsonArray csvArr && csvArr.Count > 0)
+            return csvArr;
+
+        // 4) Fallback: wrap as a plain text object.
+        return new JsonObject { ["text"] = trimmed };
+    }
+
+    /// <summary>
+    /// Parses lines of the form "key=value" or "key: value" into a JSON object.
+    /// </summary>
+    private static JsonNode ParseKeyValue(string output)
+    {
+        var obj = new JsonObject();
+        foreach (var rawLine in output.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0) continue;
+
+            int sep = line.IndexOf('=');
+            if (sep < 0) sep = line.IndexOf(':');
+            if (sep <= 0) continue;
+
+            var key = line[..sep].Trim().Trim('"', '\'');
+            var value = line[(sep + 1)..].Trim().Trim('"', '\'');
+
+            if (key.Length == 0) continue;
+            obj[key] = CoerceScalar(value);
+        }
+        return obj;
+    }
+
+    /// <summary>
+    /// Parses comma- or tab-separated rows into a JSON array of objects (using the
+    /// first row as headers when present) or arrays of scalars.
+    /// </summary>
+    private static JsonNode ParseCsv(string output)
+    {
+        var lines = output.Split('\n')
+                          .Select(l => l.TrimEnd('\r'))
+                          .Where(l => l.Trim().Length > 0)
+                          .ToList();
+
+        if (lines.Count == 0) return new JsonArray();
+
+        // Detect delimiter: prefer tab if present, else comma.
+        var hasTab = lines.Any(l => l.Contains('\t'));
+        var delim = hasTab ? '\t' : ',';
+
+        var rows = lines.Select(l => SplitDelimited(l, delim)).ToList();
+        var arr = new JsonArray();
+
+        // Heuristic: if the first row has all non-numeric, non-empty cells, treat as header.
+        var first = rows[0];
+        bool hasHeader = first.Count > 0 &&
+                         first.All(c => c.Length > 0 && !double.TryParse(c, out _));
+
+        int start = hasHeader ? 1 : 0;
+
+        for (int i = start; i < rows.Count; i++)
+        {
+            var cells = rows[i];
+            if (hasHeader)
+            {
+                var rowObj = new JsonObject();
+                for (int c = 0; c < cells.Count; c++)
+                {
+                    var header = c < first.Count ? first[c].Trim() : $"col{c}";
+                    if (header.Length == 0) header = $"col{c}";
+                    rowObj[header] = CoerceScalar(cells[c].Trim());
+                }
+                arr.Add(rowObj);
+            }
+            else
+            {
+                var rowArr = new JsonArray();
+                foreach (var cell in cells) rowArr.Add(CoerceScalar(cell.Trim()));
+                arr.Add(rowArr);
+            }
+        }
+
+        return arr;
+    }
+
+    /// <summary>
+    /// Splits a line by the delimiter, respecting simple double-quoted fields.
+    /// </summary>
+    private static List<string> SplitDelimited(string line, char delim)
+    {
+        var result = new List<string>();
+        var current = new StringBuilder();
+        bool inQuotes = false;
+
+        foreach (var ch in line)
+        {
+            if (ch == '"')
+            {
+                inQuotes = !inQuotes;
+            }
+            else if (ch == delim && !inQuotes)
+            {
+                result.Add(current.ToString());
+                current.Clear();
+            }
+            else
+            {
+                current.Append(ch);
+            }
+        }
+        result.Add(current.ToString());
+        return result;
+    }
+
+    /// <summary>
+    /// Converts a string to a JSON scalar (number, bool, or string) when possible.
+    /// </summary>
+    private static JsonNode CoerceScalar(string value)
+    {
+        if (long.TryParse(value, out var l)) return JsonValue.Create(l)!;
+        if (double.TryParse(value, System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out var d))
+            return JsonValue.Create(d)!;
+        if (value.Equals("true", StringComparison.OrdinalIgnoreCase)) return JsonValue.Create(true)!;
+        if (value.Equals("false", StringComparison.OrdinalIgnoreCase)) return JsonValue.Create(false)!;
+        if (value.Equals("null", StringComparison.OrdinalIgnoreCase)) return JsonValue.Create((string?)null)!;
+        return JsonValue.Create(value)!;
+    }
+
     // ── git_* tools ──────────────────────────────────────────────────────────
 
     private static async Task<string> GitStatusAsync(string path)
@@ -1015,6 +1289,88 @@ public static class ToolDispatcher
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Resolves a dot-path query (e.g. "a.b[0].c") against a JSON node.
+    /// Supports object properties and array indices. Returns null if not found.
+    /// </summary>
+    private static JsonNode? QueryJson(JsonNode node, string query)
+    {
+        var current = node;
+        var token = new StringBuilder();
+
+        for (int i = 0; i < query.Length; i++)
+        {
+            var ch = query[i];
+
+            if (ch == '.')
+            {
+                if (token.Length > 0)
+                {
+                    current = Step(current, token.ToString());
+                    if (current is null) return null;
+                    token.Clear();
+                }
+            }
+            else if (ch == '[')
+            {
+                if (token.Length > 0)
+                {
+                    current = Step(current, token.ToString());
+                    if (current is null) return null;
+                    token.Clear();
+                }
+
+                // Read the index until ']'.
+                var idxEnd = query.IndexOf(']', i);
+                if (idxEnd < 0) return null;
+                var idxText = query[(i + 1)..idxEnd].Trim().Trim('"', '\'');
+                if (!int.TryParse(idxText, out var idx)) return null;
+
+                if (current is JsonArray arr)
+                {
+                    if (idx < 0 || idx >= arr.Count) return null;
+                    current = arr[idx];
+                }
+                else
+                {
+                    return null;
+                }
+
+                i = idxEnd;
+            }
+            else
+            {
+                token.Append(ch);
+            }
+        }
+
+        if (token.Length > 0)
+        {
+            current = Step(current, token.ToString());
+            if (current is null) return null;
+        }
+
+        return current;
+    }
+
+    /// <summary>
+    /// Steps one level into an object property or array index.
+    /// </summary>
+    private static JsonNode? Step(JsonNode node, string key)
+    {
+        if (node is JsonObject obj)
+        {
+            if (obj.TryGetPropertyValue(key, out var value)) return value;
+            return null;
+        }
+        if (node is JsonArray arr && int.TryParse(key, out var idx))
+        {
+            if (idx >= 0 && idx < arr.Count) return arr[idx];
+            return null;
+        }
+        return null;
+    }
 
     /// <summary>
     /// Detects whether a file is binary by scanning the first 8 KB for null bytes
