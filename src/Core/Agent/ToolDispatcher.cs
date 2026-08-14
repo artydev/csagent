@@ -127,6 +127,10 @@ public static class ToolDispatcher
                     args["query"]!.GetValue<string>(),
                     args["maxResults"]?.GetValue<int>() ?? 5),
 
+                "fetch_url" => await FetchUrlAsync(
+                    args["url"]!.GetValue<string>(),
+                    args["maxChars"]?.GetValue<int>() ?? 20_000),
+
                 "switch_model" => SwitchModel(
                     args["model"]!.GetValue<string>(),
                     switchModel),
@@ -474,6 +478,21 @@ public static class ToolDispatcher
                   "maxResults": { "type": "integer", "description": "Maximum number of results to return. Defaults to 5, max 10." }
                 },
                 "required": ["query"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "fetch_url",
+              "description": "Retrieve the content of a webpage or URL and return it as readable text. Use this to read articles, docs, or any web page. Returns the page title and the visible text content (HTML tags stripped).",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "url":      { "type": "string",  "description": "The absolute http/https URL of the page to fetch." },
+                  "maxChars": { "type": "integer", "description": "Maximum number of characters of text to return. Defaults to 20000, max 100000." }
+                },
+                "required": ["url"]
               }
             }
           },
@@ -1435,6 +1454,82 @@ public static class ToolDispatcher
             return $"Error: web_search - {ex.Message}";
         }
         catch (Exception ex) { return $"Error: web_search — {ex.Message}"; }
+    }
+
+    // ── fetch_url ───────────────────────────────────────────────────────────
+
+    private static async Task<string> FetchUrlAsync(string url, int maxChars)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return "Error: fetch_url - 'url' argument is required.";
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                return $"Error: fetch_url - invalid URL '{url}'. Only http/https URLs are allowed.";
+
+            if (maxChars < 1) maxChars = 1;
+            if (maxChars > 100_000) maxChars = 100_000;
+
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) CsAgentUI/1.0");
+
+            using var response = await client.GetAsync(uri);
+            if (!response.IsSuccessStatusCode)
+                return $"Error: fetch_url - HTTP {(int)response.StatusCode} {response.ReasonPhrase} for '{url}'.";
+
+            var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
+            var html = await response.Content.ReadAsStringAsync();
+
+            // If it's not HTML (e.g. JSON, plain text), return it directly.
+            if (!contentType.Contains("html", StringComparison.OrdinalIgnoreCase))
+            {
+                var trimmed = html.Trim();
+                if (trimmed.Length > maxChars)
+                    trimmed = trimmed[..maxChars] + "\n... (truncated)";
+                return $"URL: {url}\nContent-Type: {contentType}\n\n{trimmed}";
+            }
+
+            // Extract the <title> for context.
+            var title = "";
+            var titleMatch = System.Text.RegularExpressions.Regex.Match(
+                html, "<title[^>]*>(.*?)</title>", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
+            if (titleMatch.Success)
+                title = System.Net.WebUtility.HtmlDecode(titleMatch.Groups[1].Value).Trim();
+
+            // Strip scripts/styles and tags, then collapse whitespace.
+            var text = System.Text.RegularExpressions.Regex.Replace(
+                html, "<script[^>]*>.*?</script>", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
+            text = System.Text.RegularExpressions.Regex.Replace(
+                text, "<style[^>]*>.*?</style>", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
+            text = System.Text.RegularExpressions.Regex.Replace(text, "<[^>]+>", " ");
+            text = System.Net.WebUtility.HtmlDecode(text);
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"[ \t]+", " ");
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"\n\s*\n+", "\n\n");
+            text = text.Trim();
+
+            if (text.Length > maxChars)
+                text = text[..maxChars] + "\n... (truncated)";
+
+            var sb = new StringBuilder();
+            sb.AppendLine($"URL: {url}");
+            if (!string.IsNullOrWhiteSpace(title))
+                sb.AppendLine($"Title: {title}");
+            sb.AppendLine();
+            sb.Append(text);
+
+            return sb.ToString().TrimEnd();
+        }
+        catch (TaskCanceledException)
+        {
+            return $"Error: fetch_url - request to '{url}' timed out.";
+        }
+        catch (HttpRequestException ex)
+        {
+            return $"Error: fetch_url - {ex.Message}";
+        }
+        catch (Exception ex) { return $"Error: fetch_url — {ex.Message}"; }
     }
 
     // ── switch_model ─────────────────────────────────────────────────────────
