@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -70,6 +71,14 @@ public static class ToolDispatcher
                 "delete_file" => DeleteFile(
                     args["path"]!.GetValue<string>()),
 
+                "zip" => Zip(
+                    args["source"]!.GetValue<string>(),
+                    args["destination"]!.GetValue<string>()),
+
+                "unzip" => Unzip(
+                    args["archive"]!.GetValue<string>(),
+                    args["destination"]!.GetValue<string>()),
+
                 "git_status" => await GitStatusAsync(
                     args["path"]?.GetValue<string>() ?? "."),
 
@@ -108,7 +117,7 @@ public static class ToolDispatcher
     /// Returns true if the tool name is considered destructive (requires user confirmation).
     /// </summary>
     public static bool IsDestructive(string name) =>
-        name is "write_file" or "edit_file" or "git_commit" or "move_file" or "delete_file";
+        name is "write_file" or "edit_file" or "git_commit" or "move_file" or "delete_file" or "unzip";
 
     /// <summary>
     /// The JSON tool definitions for the LLM API.
@@ -242,6 +251,36 @@ public static class ToolDispatcher
                   "path": { "type": "string", "description": "Path of the file to delete." }
                 },
                 "required": ["path"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "zip",
+              "description": "Create a zip archive from a source file or directory. If the source is a directory, its contents are archived recursively.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "source":      { "type": "string", "description": "File or directory to archive." },
+                  "destination": { "type": "string", "description": "Path of the .zip archive to create." }
+                },
+                "required": ["source", "destination"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "unzip",
+              "description": "Extract a zip archive into a destination directory. The destination directory is created if it does not exist. Destructive — overwrites existing files, requires user confirmation.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "archive":     { "type": "string", "description": "Path of the .zip archive to extract." },
+                  "destination": { "type": "string", "description": "Directory to extract into." }
+                },
+                "required": ["archive", "destination"]
               }
             }
           },
@@ -591,6 +630,62 @@ public static class ToolDispatcher
             return $"OK: deleted '{full}'";
         }
         catch (Exception ex) { return $"Error: delete_file — {ex.Message}"; }
+    }
+
+    // ── zip / unzip ──────────────────────────────────────────────────────────
+
+    private static string Zip(string source, string destination)
+    {
+        try
+        {
+            var srcFull = Path.GetFullPath(source);
+            var dstFull = Path.GetFullPath(destination);
+            if (!IsSafePath(srcFull) || !IsSafePath(dstFull))
+                return $"Error: zip - Paths must be inside the current working directory.";
+
+            if (!File.Exists(srcFull) && !Directory.Exists(srcFull))
+                return $"Error: zip - source not found '{srcFull}'";
+
+            var dir = Path.GetDirectoryName(dstFull);
+            if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
+
+            // Remove any pre-existing archive so creation is clean.
+            if (File.Exists(dstFull)) File.Delete(dstFull);
+
+            if (Directory.Exists(srcFull))
+            {
+                ZipFile.CreateFromDirectory(srcFull, dstFull, CompressionLevel.Optimal, includeBaseDirectory: false);
+            }
+            else
+            {
+                // Single file: create the archive and add the file as its only entry.
+                using var archive = ZipFile.Open(dstFull, ZipArchiveMode.Create);
+                archive.CreateEntryFromFile(srcFull, Path.GetFileName(srcFull), CompressionLevel.Optimal);
+            }
+
+            return $"OK: created archive '{dstFull}' ({Sz(new FileInfo(dstFull).Length)})";
+        }
+        catch (Exception ex) { return $"Error: zip — {ex.Message}"; }
+    }
+
+    private static string Unzip(string archive, string destination)
+    {
+        try
+        {
+            var arcFull = Path.GetFullPath(archive);
+            var dstFull = Path.GetFullPath(destination);
+            if (!IsSafePath(arcFull) || !IsSafePath(dstFull))
+                return $"Error: unzip - Paths must be inside the current working directory.";
+
+            if (!File.Exists(arcFull)) return $"Error: unzip - archive not found '{arcFull}'";
+
+            Directory.CreateDirectory(dstFull);
+            ZipFile.ExtractToDirectory(arcFull, dstFull, overwriteFiles: true);
+
+            var count = Directory.EnumerateFiles(dstFull, "*", SearchOption.AllDirectories).Count();
+            return $"OK: extracted '{arcFull}' -> '{dstFull}' ({count} file(s))";
+        }
+        catch (Exception ex) { return $"Error: unzip — {ex.Message}"; }
     }
 
     // ── git_* tools ──────────────────────────────────────────────────────────
