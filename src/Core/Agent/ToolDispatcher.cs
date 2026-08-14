@@ -15,6 +15,7 @@ public static class ToolDispatcher
     private const int ShellTimeoutMs = 60_000;
     private const int MaxSearchResults = 200;
     private const long MaxSearchFileBytes = 1_048_576; // skip binary/large files
+    private const int MaxTreeEntries = 500;            // cap tree output to avoid huge responses
 
     /// <summary>
     /// Delegate used by the switch_model tool to change the active model at runtime.
@@ -50,6 +51,10 @@ public static class ToolDispatcher
                 "list_dir" => ListDir(
                     args["path"]?.GetValue<string>() ?? ".",
                     args["recursive"]?.GetValue<bool>() ?? false),
+
+                "tree" => Tree(
+                    args["path"]?.GetValue<string>() ?? ".",
+                    args["depth"]?.GetValue<int>() ?? -1),
 
                 "search_files" => SearchFiles(
                     args["pattern"]!.GetValue<string>(),
@@ -163,6 +168,21 @@ public static class ToolDispatcher
                 "properties": {
                   "path":      { "type": "string",  "description": "Directory to list. Defaults to '.'." },
                   "recursive": { "type": "boolean", "description": "Whether to list recursively." }
+                },
+                "required": []
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "tree",
+              "description": "Display a visual, indented directory tree of the given path. Directories are shown with a trailing '/'. Use 'depth' to limit how many levels deep to recurse (-1 for unlimited). Hidden directories (starting with '.') and build output (bin/, obj/) are skipped.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path":  { "type": "string",  "description": "Directory to display. Defaults to '.'." },
+                  "depth": { "type": "integer", "description": "Maximum recursion depth. -1 (default) means unlimited." }
                 },
                 "required": []
               }
@@ -457,6 +477,98 @@ public static class ToolDispatcher
             return sb.Length == 0 ? "(empty)" : sb.ToString().TrimEnd();
         }
         catch (Exception ex) { return $"Error: list_dir — {ex.Message}"; }
+    }
+
+    // ── tree ─────────────────────────────────────────────────────────────────
+
+    private static string Tree(string path, int depth)
+    {
+        try
+        {
+            var full = Path.GetFullPath(path);
+            if (!IsSafePath(full))
+                return $"Error: tree - Path '{full}' is not allowed for listing. Only directories in the current working directory are permitted.";
+
+            if (!Directory.Exists(full)) return $"Error: directory not found '{full}'";
+
+            var sb = new StringBuilder();
+            var count = 0;
+
+            // Root line: show the directory name (or '.' for the current dir).
+            var rootName = Path.GetFileName(full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (string.IsNullOrEmpty(rootName)) rootName = full;
+            sb.AppendLine(rootName + "/");
+
+            AppendTreeLevel(full, "", depth, sb, ref count);
+
+            if (count >= MaxTreeEntries)
+                sb.AppendLine($"... (truncated at {MaxTreeEntries} entries)");
+
+            return sb.ToString().TrimEnd();
+        }
+        catch (Exception ex) { return $"Error: tree — {ex.Message}"; }
+    }
+
+    /// <summary>
+    /// Recursively appends the contents of a directory to the tree output using
+    /// box-drawing characters. 'prefix' carries the indentation for ancestors.
+    /// </summary>
+    private static void AppendTreeLevel(
+        string dir,
+        string prefix,
+        int depth,
+        StringBuilder sb,
+        ref int count)
+    {
+        if (count >= MaxTreeEntries) return;
+
+        // Gather and sort entries: directories first, then files, each alphabetically.
+        var dirs = new List<string>();
+        var files = new List<string>();
+
+        foreach (var d in Directory.EnumerateDirectories(dir))
+        {
+            var name = Path.GetFileName(d);
+            if (name.StartsWith(".")) continue;
+            if (name.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("obj", StringComparison.OrdinalIgnoreCase)) continue;
+            dirs.Add(name);
+        }
+
+        foreach (var f in Directory.EnumerateFiles(dir))
+        {
+            var name = Path.GetFileName(f);
+            if (name.StartsWith(".")) continue;
+            files.Add(name);
+        }
+
+        dirs.Sort(StringComparer.OrdinalIgnoreCase);
+        files.Sort(StringComparer.OrdinalIgnoreCase);
+
+        var entries = dirs.Select(d => (Name: d, IsDir: true))
+                          .Concat(files.Select(f => (Name: f, IsDir: false)))
+                          .ToList();
+
+        for (int i = 0; i < entries.Count; i++)
+        {
+            if (count >= MaxTreeEntries) return;
+
+            var (name, isDir) = entries[i];
+            var isLast = i == entries.Count - 1;
+
+            // Branch glyph: '└── ' for the last child, '├── ' otherwise.
+            var branch = isLast ? "└── " : "├── ";
+            sb.AppendLine(prefix + branch + name + (isDir ? "/" : ""));
+            count++;
+
+            if (isDir && (depth < 0 || depth > 0))
+            {
+                // Child prefix: '    ' for last child, '│   ' otherwise.
+                var childPrefix = prefix + (isLast ? "    " : "│   ");
+                var childDepth = depth < 0 ? -1 : depth - 1;
+                AppendTreeLevel(Path.Combine(dir, name), childPrefix, childDepth, sb, ref count);
+            }
+        }
     }
 
     // ── search_files (grep) ──────────────────────────────────────────────────
