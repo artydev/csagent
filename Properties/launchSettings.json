@@ -2,7 +2,6 @@
   "profiles": {
     "Default": {
       "commandName": "Project",
-      "commandLineArgs": "--desktop",
       "nativeDebugging": false
     },
     "Desktop": {
