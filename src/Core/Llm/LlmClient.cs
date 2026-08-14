@@ -7,7 +7,7 @@ namespace CsAgentUI;
 public sealed class LlmClient : IDisposable
 {
     private readonly HttpClient _http;
-    private readonly string     _model;
+    private string     _model;
     private readonly string     _baseUrl;
 
     public LlmClient(string apiKey, string baseUrl, string model)
@@ -17,6 +17,16 @@ public sealed class LlmClient : IDisposable
         _http    = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
         _http.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", apiKey);
+    }
+
+    /// <summary>
+    /// The currently active model identifier. Can be changed at runtime
+    /// (e.g. via the switch_model tool) to switch models mid-session.
+    /// </summary>
+    public string Model
+    {
+        get => _model;
+        set => _model = value;
     }
 
     public async Task<JsonNode> CompleteChatAsync(

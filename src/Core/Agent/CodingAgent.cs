@@ -25,6 +25,13 @@ public sealed class CodingAgent : IDisposable
         _cts = new CancellationTokenSource();
         var isWindows = OperatingSystem.IsWindows();
 
+        // Callback used by the switch_model tool to change the active model.
+        ToolDispatcher.SwitchModelHandler switchModel = (model) =>
+        {
+            _client.Model = model;
+            return $"OK: model switched to '{model}'.";
+        };
+
         for (int step = 1; step <= _opts.MaxSteps; step++)
         {
             _cts.Token.ThrowIfCancellationRequested();
@@ -90,12 +97,12 @@ public sealed class CodingAgent : IDisposable
                 else if (_opts.Confirm && ToolDispatcher.IsDestructive(funcName))
                 {
                     result = UI.Confirm($"Allow destructive action '{funcName}'?")
-                        ? await ToolDispatcher.DispatchAsync(funcName, argsRaw, isWindows)
+                        ? await ToolDispatcher.DispatchAsync(funcName, argsRaw, isWindows, switchModel)
                         : "Tool call declined by user.";
                 }
                 else
                 {
-                    result = await ToolDispatcher.DispatchAsync(funcName, argsRaw, isWindows);
+                    result = await ToolDispatcher.DispatchAsync(funcName, argsRaw, isWindows, switchModel);
                 }
 
                 var isError = result.StartsWith("Error:", StringComparison.OrdinalIgnoreCase)
@@ -131,6 +138,7 @@ public sealed class CodingAgent : IDisposable
             - Use read_file and list_dir to inspect the workspace before writing.
             - Use write_file for all file creation and modification.
             - Use sh for builds, tests, package installs, and system commands.
+            - Use switch_model to change the active model when the user asks to switch models.
             - If a command fails, analyse the error and retry with a fix.
             - When the task is fully complete, say exactly "Task complete." and stop.
             - Never silently swallow errors.

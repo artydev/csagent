@@ -151,7 +151,8 @@ function createToolCallMessage(name, argsJson) {
         "write_file": "📝 Write File",
         "read_file": "📖 Read File",
         "list_dir": "📂 List Directory",
-        "sh": "💻 Shell Command"
+        "sh": "💻 Shell Command",
+        "switch_model": "🔄 Switch Model"
     };
     header.innerHTML = `<strong>${toolLabels[name] || "🔧 " + name}</strong>`;
     div.appendChild(header);

@@ -14,9 +14,23 @@ public static class ToolDispatcher
     private const int ShellTimeoutMs = 60_000;
 
     /// <summary>
+    /// Delegate used by the switch_model tool to change the active model at runtime.
+    /// Returns a human-readable confirmation/error message.
+    /// </summary>
+    public delegate string SwitchModelHandler(string model);
+
+    /// <summary>
     /// Dispatch a tool call by name with the given JSON arguments.
     /// </summary>
-    public static async Task<string> DispatchAsync(string name, string argsJson, bool isWindows)
+    /// <param name="name">The tool name.</param>
+    /// <param name="argsJson">JSON string of the tool arguments.</param>
+    /// <param name="isWindows">Whether the host OS is Windows.</param>
+    /// <param name="switchModel">Optional callback invoked by the switch_model tool.</param>
+    public static async Task<string> DispatchAsync(
+        string name,
+        string argsJson,
+        bool isWindows,
+        SwitchModelHandler? switchModel = null)
     {
         try
         {
@@ -36,6 +50,10 @@ public static class ToolDispatcher
 
                 "sh" => await RunShellAsync(
                     args["cmd"]!.GetValue<string>(), isWindows),
+
+                "switch_model" => SwitchModel(
+                    args["model"]!.GetValue<string>(),
+                    switchModel),
 
                 _ => $"Error: Unknown tool '{name}'"
             };
@@ -111,6 +129,20 @@ public static class ToolDispatcher
                   "cmd": { "type": "string", "description": "Shell command to run." }
                 },
                 "required": ["cmd"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "switch_model",
+              "description": "Switch the active LLM model for the current session. Use this when the user asks to change or switch the model.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "model": { "type": "string", "description": "The model identifier to switch to (e.g. 'openai/gpt-oss-120b')." }
+                },
+                "required": ["model"]
               }
             }
           }
@@ -234,6 +266,19 @@ public static class ToolDispatcher
                 : prefix + output;
         }
         catch (Exception ex) { return $"Shell error: {ex.Message}"; }
+    }
+
+    // ── switch_model ─────────────────────────────────────────────────────────
+
+    private static string SwitchModel(string model, SwitchModelHandler? switchModel)
+    {
+        if (string.IsNullOrWhiteSpace(model))
+            return "Error: switch_model - 'model' argument is required.";
+
+        if (switchModel is null)
+            return "Error: switch_model - model switching is not available in this context.";
+
+        return switchModel(model.Trim());
     }
 
     // ── Safety checks ────────────────────────────────────────────────────────
