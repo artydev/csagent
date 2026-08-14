@@ -145,6 +145,18 @@ public sealed class CodingAgent : IDisposable
             - ALL DESTRUCTIVE ACTIONS REQUIRE USER APPROVAL
             - FILE OPERATIONS ARE RESTRICTED TO THE CURRENT WORKING DIRECTORY ONLY
             - SHELL COMMANDS ARE FILTERED FOR POTENTIALLY DANGEROUS OPERATIONS
+
+            TERMINAL SESSIONS (run_terminal / close_terminal):
+            - Use run_terminal for interactive or long-running shell work that needs
+              persistent state (current directory, env vars, running processes).
+            - State persists across calls to the SAME session id. Use the default
+              'default' session for normal work; use distinct ids for independent sessions.
+            - Prefer run_terminal over sh when you need to chain commands that depend
+              on prior state, or when running a long-lived process (dev server, REPL).
+            - If a command times out, the session stays alive - send another command
+              to inspect state or continue.
+            - Always call close_terminal when you are done with a session to free
+              its shell process.
             """));
         return obj;
     }
