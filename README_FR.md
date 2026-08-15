@@ -267,3 +267,6 @@ CsAgentUI
   courant.
 - Les commandes shell sont filtrées pour les opérations potentiellement
   dangereuses.
+
+## Téléchargement
+[CsAgent](https://raw.githubusercontent.com/artydev/csagent-ui/main/download/csagent.exe)
