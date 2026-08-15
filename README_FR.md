@@ -1,4 +1,4 @@
-# CsAgentUI
+# CsAgentUI 
 
 Un agent de codage autonome multiplateforme écrit en C#/.NET 10. Il se connecte
 à un point de terminaison LLM compatible OpenAI et peut lire des fichiers,
