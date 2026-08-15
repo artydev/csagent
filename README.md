@@ -1,196 +1,272 @@
-# CsAgentUI
+# CsAgentUI 
 
-A cross-platform autonomous coding agent built in C#/.NET 10. It connects to an
-OpenAI-compatible LLM endpoint and can read files, search code, run shell
-commands, and write files to complete coding tasks — all driven by an LLM loop.
+Un agent de codage autonome multiplateforme écrit en C#/.NET 10. Il se connecte
+à un point de terminaison LLM compatible OpenAI et peut lire des fichiers,
+rechercher du code, exécuter des commandes shell et écrire des fichiers pour
+accomplir des tâches de codage — le tout piloté par une boucle LLM.
 
-## Features
+## Fonctionnalités
 
-- **Three interfaces** — terminal (CLI), web UI, and a native Windows window.
-- **Autonomous agent loop** — the LLM plans and executes tool calls step by step.
-- **Conversation memory** — history is persisted to a JSON file between runs.
-- **Dry-run mode** — simulate tool execution without making any changes.
-- **Safety** — destructive actions require confirmation; file operations are
-  restricted to the current working directory.
+- **Trois interfaces** — terminal (CLI), interface web et fenêtre Windows native.
+- **Boucle d'agent autonome** — le LLM planifie et exécute les appels d'outils
+  étape par étape.
+- **Mémoire de conversation** — l'historique est conservé dans un fichier JSON
+  entre les exécutions.
+- **Mode dry-run** — simule l'exécution des outils sans apporter aucune
+  modification.
+- **Sécurité** — les actions destructives nécessitent une confirmation ; les
+  opérations sur les fichiers sont limitées au répertoire de travail courant.
 
-## Requirements
+## Architecture
 
-- .NET 10 SDK (or a published single-file binary)
-- An API key for an OpenAI-compatible endpoint
-
-## Setup
-
-Set your API key as an environment variable:
-
-```
-set ALBERT_API_KEY=your-key-here
-```
-
-## Usage
+CsAgentUI suit une architecture en couches simple, sans dépendances NuGet
+externes. Le point d'entrée (`Program.cs`) analyse les arguments de ligne de
+commande, puis sélectionne l'une des trois interfaces de présentation.
 
 ```
-CsAgentUI [options] [memory-file]
+Program.cs  (point d'entrée — analyse des arguments + sélection du mode)
+   │
+   ├── Presentation/Tui      → interface terminale (CLI)
+   ├── Presentation/Web      → interface web (serveur ASP.NET + SSE)
+   └── Presentation/Desktop  → fenêtre native (AOTrino WebView2, Windows)
+        │
+        └── Core/Agent/CodingAgent   (boucle d'agent autonome)
+             │
+             ├── Core/Llm/LlmClient      → appels API LLM (compatible OpenAI)
+             ├── Core/Agent/ToolDispatcher → exécution des outils
+             └── Core/Memory/MemoryStore → persistance de la conversation (JSON)
 ```
 
-### Command-line arguments (exact)
+### Couches principales
 
-The parser (`src/Shared/ArgumentParser.cs`) recognizes the following arguments.
-All flags are matched by exact string equality (`args.Contains(...)`), so they
-must be spelled exactly as shown. Arguments are case-sensitive.
+- **`src/Shared/`** — utilitaires partagés : analyse des arguments
+  (`ArgumentParser`), affichage de l'aide (`HelpDisplay`), documentation
+  (`DocDisplay`) et helpers JSON (`JsonHelpers`).
 
-#### Modes (mutually exclusive flags)
+- **`src/Core/`** — la logique métier indépendante de l'interface :
+  - `Agent/CodingAgent` — la boucle principale : il envoie l'historique au LLM,
+    traite les appels d'outils renvoyés, exécute chaque outil via le
+    `ToolDispatcher`, puis ajoute les résultats à la conversation.
+  - `Agent/ToolDispatcher` — enregistre et exécute les outils (lecture/écriture
+    de fichiers, shell, git, etc.) et identifie les actions destructives.
+  - `Llm/LlmClient` — client HTTP pour le point de terminaison LLM compatible
+    OpenAI (chat completions).
+  - `Llm/LlmSettings` — configuration du modèle et du point de terminaison.
+  - `Memory/MemoryStore` — charge et enregistre l'historique de conversation
+    dans un fichier JSON.
+  - `Abstractions/IAgentObserver` — interface d'observation des événements de
+    l'agent (étapes, pensées, appels d'outils, résultats, erreurs).
 
-| Flag         | Parsed field      | Description                                              |
+- **`src/Presentation/`** — les trois interfaces, chacune implémentant
+  `IAgentObserver` pour afficher la progression de l'agent :
+  - `Tui/` — interface terminale interactive (`ConsoleObserver`,
+    `ConsoleRenderer`, `TuiHost`).
+  - `Web/` — serveur web avec flux SSE (`WebHost`, `ApiEndpoints`,
+    `SseObserver`, `StaticAssets`).
+  - `Desktop/` — fenêtre native Windows via AOTrino (`DesktopHost`,
+    `DesktopAPI`, `DesktopObserver`).
+
+### Flux d'exécution
+
+1. `Program.cs` analyse les arguments et choisit le mode (CLI, web ou natif).
+2. L'hôte de présentation crée un `CodingAgent` avec un observateur.
+3. La boucle de l'agent envoie l'historique au LLM ; si le LLM demande des
+   appels d'outils, chacun est exécuté via le `ToolDispatcher` (avec
+   confirmation en cas d'action destructive, ou simulation en mode dry-run).
+4. Les résultats sont renvoyés au LLM et l'historique est sauvegardé dans le
+   fichier mémoire entre chaque étape.
+5. La boucle se termine lorsque le LLM répond avec `finish_reason = "stop"` ou
+   atteint le nombre maximal d'étapes.
+
+## Prérequis
+
+- SDK .NET 10 (ou un binaire autonome publié en un seul fichier)
+- Une clé API pour un point de terminaison compatible OpenAI
+
+## Configuration
+
+Définissez votre clé API comme variable d'environnement :
+
+```
+set ALBERT_API_KEY=votre-cle-ici
+```
+
+## Utilisation
+
+```
+CsAgentUI [options] [fichier-memoire]
+```
+
+### Arguments de ligne de commande (exacts)
+
+L'analyseur (`src/Shared/ArgumentParser.cs`) reconnaît les arguments suivants.
+Tous les drapeaux sont comparés par égalité de chaîne exacte
+(`args.Contains(...)`), ils doivent donc être orthographiés exactement comme
+indiqué. Les arguments sont sensibles à la casse.
+
+#### Modes (drapeaux mutuellement exclusifs)
+
+| Drapeau      | Champ analysé     | Description                                              |
 |--------------|-------------------|----------------------------------------------------------|
-| *(no flag)*  | —                 | CLI mode — interactive terminal session                  |
-| `--ui`       | `IsUiMode`        | Web UI mode — starts a web server (default port 5050)    |
-| `--native`   | `IsNativeMode`    | Native window mode — AOTrino WebView2 window (Windows)   |
-| `--desktop`  | `IsDesktopMode`   | Alias for native window mode (also accepted)             |
+| *(aucun)*    | —                 | Mode CLI — session terminale interactive                 |
+| `--ui`       | `IsUiMode`        | Mode interface web — démarre un serveur web (port 5050 par défaut) |
+| `--native`   | `IsNativeMode`    | Mode fenêtre native — fenêtre AOTrino WebView2 (Windows) |
+| `--desktop`  | `IsDesktopMode`   | Alias du mode fenêtre native (également accepté)         |
 
 #### Options
 
-| Option              | Parsed field      | Description                                        |
-|---------------------|-------------------|----------------------------------------------------|
-| `--help`, `-h`, `/?`| `ShowHelp`        | Show help and exit                                 |
-| `--version`         | `ShowVersion`     | Show version and exit                              |
-| `--doc`             | `ShowDoc`         | Show full documentation in the terminal and exit   |
-| `--mem <file>`      | `MemoryFile`      | Custom memory/conversation file (default: `agent_memory.json`) |
-| `--model <name>`    | `ModelOverride`   | Override the LLM model (default: `LlmSettings.Model`) |
-| `--port, -p <n>`    | `Port`            | Web UI port (default: `5050`)                      |
-| `--dry-run`         | `IsDryRun`        | Simulate tool execution without making changes     |
+| Option               | Champ analysé      | Description                                        |
+|----------------------|--------------------|----------------------------------------------------|
+| `--help`, `-h`, `/?` | `ShowHelp`         | Affiche l'aide et quitte                           |
+| `--version`          | `ShowVersion`      | Affiche la version et quitte                       |
+| `--doc`              | `ShowDoc`          | Affiche la documentation complète dans le terminal et quitte |
+| `--mem <fichier>`    | `MemoryFile`       | Fichier mémoire/conversation personnalisé (défaut : `agent_memory.json`) |
+| `--model <nom>`      | `ModelOverride`    | Remplace le modèle LLM (défaut : `LlmSettings.Model`) |
+| `--port, -p <n>`     | `Port`             | Port de l'interface web (défaut : `5050`)          |
+| `--dry-run`          | `IsDryRun`         | Simule l'exécution des outils sans apporter de modification |
 
-#### Positional argument: `[memory-file]`
+#### Argument positionnel : `[fichier-memoire]`
 
-If no `--mem <file>` is given, the **first** argument that is not a recognized
-flag and does not start with `-` is treated as the memory file. The recognized
-non-flag tokens are `--ui`, `--native`, `--desktop`, and `--dry-run`; any other
-argument starting with `-` is skipped. If none is found, the default
-`agent_memory.json` is used.
+Si aucun `--mem <fichier>` n'est fourni, le **premier** argument qui n'est pas un
+drapeau reconnu et qui ne commence pas par `-` est traité comme le fichier
+mémoire. Les jetons reconnus qui ne sont pas des drapeaux sont `--ui`,
+`--native`, `--desktop` et `--dry-run` ; tout autre argument commençant par `-`
+est ignoré. Si aucun n'est trouvé, la valeur par défaut `agent_memory.json` est
+utilisée.
 
-#### Parsing rules (exact behaviour)
+#### Règles d'analyse (comportement exact)
 
-- **`--mem`** — takes the next argument as the file path. If `--mem` is the last
-  argument (no value follows), it is ignored.
-- **`--model`** — takes the next argument as the model name. If `--model` is the
-  last argument (no value follows), it is ignored.
-- **`--port` / `-p`** — takes the next argument and parses it as an integer.
-  The value is accepted only if `0 < port < 65536`; otherwise the default `5050`
-  is used.
-- **`--help` / `-h` / `/?`** — any of these sets `ShowHelp`.
-- **`--version`** — sets `ShowVersion`.
-- **`--doc`** — sets `ShowDoc`.
-- **`--dry-run`** — sets `IsDryRun`.
-- **`--ui` / `--native` / `--desktop`** — set their respective mode flags.
+- **`--mem`** — prend l'argument suivant comme chemin de fichier. Si `--mem` est
+  le dernier argument (aucune valeur ne suit), il est ignoré.
+- **`--model`** — prend l'argument suivant comme nom de modèle. Si `--model` est
+  le dernier argument (aucune valeur ne suit), il est ignoré.
+- **`--port` / `-p`** — prend l'argument suivant et l'analyse comme un entier.
+  La valeur n'est acceptée que si `0 < port < 65536` ; sinon, la valeur par
+  défaut `5050` est utilisée.
+- **`--help` / `-h` / `/?`** — n'importe lequel de ces drapeaux définit
+  `ShowHelp`.
+- **`--version`** — définit `ShowVersion`.
+- **`--doc`** — définit `ShowDoc`.
+- **`--dry-run`** — définit `IsDryRun`.
+- **`--ui` / `--native` / `--desktop`** — définissent leurs drapeaux de mode
+  respectifs.
 
-### Examples
+### Exemples
 
 ```
-csagent                                    CLI mode
-csagent --ui                               Web UI mode (port 5050)
-csagent --native                           Native window mode
-csagent --desktop                          Native window mode (alias)
-csagent --ui --port 8080                   Web UI on port 8080
-csagent --model gpt-4o                     CLI with a custom model
-csagent --ui --model gpt-4o                Web UI with custom model
-csagent --native --model gpt-4o            Native window with custom model
-csagent --mem my_history.json              CLI with a custom memory file
-csagent --ui --mem my_history.json         Web UI with custom memory file
-csagent --dry-run                          Dry-run mode (no changes)
-csagent --doc                              Show documentation
-csagent --version                          Show version
-csagent --help                             Show help
+csagent                                    Mode CLI
+csagent --ui                               Mode interface web (port 5050)
+csagent --native                           Mode fenêtre native
+csagent --desktop                          Mode fenêtre native (alias)
+csagent --ui --port 8080                   Interface web sur le port 8080
+csagent --model gpt-4o                     CLI avec un modèle personnalisé
+csagent --ui --model gpt-4o                Interface web avec modèle personnalisé
+csagent --native --model gpt-4o            Fenêtre native avec modèle personnalisé
+csagent --mem my_history.json              CLI avec un fichier mémoire personnalisé
+csagent --ui --mem my_history.json         Interface web avec fichier mémoire personnalisé
+csagent --dry-run                          Mode dry-run (aucune modification)
+csagent --doc                              Affiche la documentation
+csagent --version                          Affiche la version
+csagent --help                             Affiche l'aide
 ```
 
-## Available Tools
+## Outils disponibles
 
-The agent can call the following tools to complete tasks:
+L'agent peut appeler les outils suivants pour accomplir ses tâches :
 
 ```
 CsAgentUI
-├── File operations
-│   ├── write_file      Write/overwrite a text file
-│   ├── read_file       Read a text file
-│   ├── read_json       Read a JSON file (with dot-path query)
-│   ├── edit_file       Find-and-replace edits (atomic)
-│   ├── copy_file       Copy a file
-│   ├── move_file       Move/rename a file  ⚠ destructive
-│   ├── delete_file     Delete a file       ⚠ destructive
-│   ├── zip             Create a zip archive
-│   └── unzip           Extract a zip archive ⚠ destructive
-├── Inspection & search
-│   ├── list_dir        List files/subdirectories
-│   ├── tree            Visual directory tree
-│   ├── search_files    Recursive grep search
-│   └── parse_output    Parse output into structured JSON
+├── Opérations sur les fichiers
+│   ├── write_file      Écrire/écraser un fichier texte
+│   ├── read_file       Lire un fichier texte
+│   ├── read_json       Lire un fichier JSON (avec requête dot-path)
+│   ├── edit_file       Modifications rechercher-remplacer (atomiques)
+│   ├── copy_file       Copier un fichier
+│   ├── move_file       Déplacer/renommer un fichier  ⚠ destructif
+│   ├── delete_file     Supprimer un fichier          ⚠ destructif
+│   ├── zip             Créer une archive zip
+│   └── unzip           Extraire une archive zip      ⚠ destructif
+├── Inspection et recherche
+│   ├── list_dir        Lister les fichiers/sous-répertoires
+│   ├── tree            Arborescence de répertoires visuelle
+│   ├── search_files    Recherche grep récursive
+│   └── parse_output    Analyser la sortie en JSON structuré
 ├── Git
-│   ├── git_status      Working tree status
-│   ├── git_diff        Uncommitted changes
-│   ├── git_log         Commit history
-│   ├── git_branch      Current/local branches
-│   └── git_commit      Stage & commit  ⚠ destructive
-├── Shell & network
-│   ├── sh              Run a shell command
-│   ├── run_terminal    Persistent shell session
-│   ├── close_terminal  Close a shell session
-│   ├── http_request    Make an HTTP request
-│   ├── web_search      Search the web
-│   └── fetch_url       Fetch a webpage's text
-└── Model
-    └── switch_model    Switch the active LLM model
+│   ├── git_status      État de l'arbre de travail
+│   ├── git_diff        Modifications non validées
+│   ├── git_log         Historique des validations
+│   ├── git_branch      Branches courante/locales
+│   └── git_commit      Mettre en scène et valider  ⚠ destructif
+├── Shell et réseau
+│   ├── sh              Exécuter une commande shell
+│   ├── run_terminal    Session shell persistante
+│   ├── close_terminal  Fermer une session shell
+│   ├── http_request    Effectuer une requête HTTP
+│   ├── web_search      Rechercher sur le web
+│   └── fetch_url       Récupérer le texte d'une page web
+└── Modèle
+    └── switch_model    Changer le modèle LLM actif
 ```
 
-### File operations
+### Opérations sur les fichiers
 
-| Tool | Description |
-|------|-------------|
-| `write_file` | Write (or overwrite) a text file; creates parent directories |
-| `read_file` | Read a text file and return its content |
-| `read_json` | Read a JSON file (pretty-printed), optionally extracting a sub-value via a dot-path query |
-| `edit_file` | Apply precise find-and-replace edits to a file (atomic) |
-| `copy_file` | Copy a file from source to destination |
-| `move_file` | Move (rename) a file *(destructive)* |
-| `delete_file` | Permanently delete a file *(destructive)* |
-| `zip` | Create a zip archive from a file or directory |
-| `unzip` | Extract a zip archive into a directory *(destructive)* |
+| Outil | Description |
+|-------|-------------|
+| `write_file` | Écrit (ou écrase) un fichier texte ; crée les répertoires parents |
+| `read_file` | Lit un fichier texte et renvoie son contenu |
+| `read_json` | Lit un fichier JSON (mis en forme), en extrayant éventuellement une sous-valeur via une requête dot-path |
+| `edit_file` | Applique des modifications rechercher-remplacer précises à un fichier (atomique) |
+| `copy_file` | Copie un fichier de la source vers la destination |
+| `move_file` | Déplace (renomme) un fichier *(destructif)* |
+| `delete_file` | Supprime définitivement un fichier *(destructif)* |
+| `zip` | Crée une archive zip à partir d'un fichier ou d'un répertoire |
+| `unzip` | Extrait une archive zip dans un répertoire *(destructif)* |
 
-### Inspection & search
+### Inspection et recherche
 
-| Tool | Description |
-|------|-------------|
-| `list_dir` | List files and subdirectories (optionally recursive) |
-| `tree` | Display a visual, indented directory tree |
-| `search_files` | Recursively grep for a text pattern, returning file paths and line numbers |
-| `parse_output` | Parse command output into structured JSON (json / keyvalue / csv / auto) |
+| Outil | Description |
+|-------|-------------|
+| `list_dir` | Liste les fichiers et sous-répertoires (éventuellement de manière récursive) |
+| `tree` | Affiche une arborescence de répertoires visuelle et indentée |
+| `search_files` | Recherche récursive grep d'un motif texte, renvoyant les chemins de fichiers et les numéros de ligne |
+| `parse_output` | Analyse la sortie de commande en JSON structuré (json / keyvalue / csv / auto) |
 
 ### Git
 
-| Tool | Description |
-|------|-------------|
-| `git_status` | Show working tree status |
-| `git_diff` | Show uncommitted changes (optionally staged) |
-| `git_log` | Show recent commit history |
-| `git_branch` | Show current branch and local branches |
-| `git_commit` | Stage all changes and create a commit *(destructive)* |
+| Outil | Description |
+|-------|-------------|
+| `git_status` | Affiche l'état de l'arbre de travail |
+| `git_diff` | Affiche les modifications non validées (éventuellement mises en scène) |
+| `git_log` | Affiche l'historique récent des validations |
+| `git_branch` | Affiche la branche courante et les branches locales |
+| `git_commit` | Met en scène toutes les modifications et crée une validation *(destructif)* |
 
-### Shell & network
+### Shell et réseau
 
-| Tool | Description |
-|------|-------------|
-| `sh` | Execute a shell command (cmd.exe on Windows, /bin/sh elsewhere) |
-| `run_terminal` | Run a command in a persistent, stateful shell session |
-| `close_terminal` | Close and terminate a persistent shell session |
-| `http_request` | Make an HTTP request and return status, headers, and body |
-| `web_search` | Search the web for docs, errors, or solutions |
-| `fetch_url` | Retrieve a webpage's readable text content |
+| Outil | Description |
+|-------|-------------|
+| `sh` | Exécute une commande shell (cmd.exe sous Windows, /bin/sh ailleurs) |
+| `run_terminal` | Exécute une commande dans une session shell persistante et avec état |
+| `close_terminal` | Ferme et termine une session shell persistante |
+| `http_request` | Effectue une requête HTTP et renvoie le statut, les en-têtes et le corps |
+| `web_search` | Recherche sur le web des documentations, erreurs ou solutions |
+| `fetch_url` | Récupère le contenu textuel lisible d'une page web |
 
-### Model
+### Modèle
 
-| Tool | Description |
-|------|-------------|
-| `switch_model` | Switch the active LLM model for the current session |
+| Outil | Description |
+|-------|-------------|
+| `switch_model` | Change le modèle LLM actif pour la session courante |
 
-## Notes
+## Remarques
 
-- All destructive actions (e.g. `write_file`, `edit_file`, `git_commit`, `move_file`, `delete_file`, `unzip`) require user confirmation.
-- File operations are restricted to the current working directory.
-- Shell commands are filtered for potentially dangerous operations.
+- Toutes les actions destructives (par ex. `write_file`, `edit_file`,
+  `git_commit`, `move_file`, `delete_file`, `unzip`) nécessitent une
+  confirmation de l'utilisateur.
+- Les opérations sur les fichiers sont limitées au répertoire de travail
+  courant.
+- Les commandes shell sont filtrées pour les opérations potentiellement
+  dangereuses.
+
+## Téléchargement
+[CsAgent](https://github.com/artydev/csagent/releases/download/v0.4/csagent.exe)
