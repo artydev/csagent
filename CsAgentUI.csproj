@@ -68,7 +68,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="release\" />
+    <Folder Include="download\" />
   </ItemGroup>
 
 </Project>
