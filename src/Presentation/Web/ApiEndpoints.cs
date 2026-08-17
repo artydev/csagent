@@ -4,7 +4,7 @@ namespace CsAgentUI.Endpoints;
 
 public static class ApiEndpoints
 {
-    public static IEndpointRouteBuilder MapEndpoints(this IEndpointRouteBuilder app, string memoryFile, string? modelOverride = null)
+    public static IEndpointRouteBuilder MapEndpoints(this IEndpointRouteBuilder app, string memoryFile, string? modelOverride = null, string? mcpUrl = null)
     {
         app.MapGet("/api/chat", async (HttpContext ctx, string prompt) =>
         {
@@ -33,7 +33,8 @@ public static class ApiEndpoints
                 LlmSettings.Endpoint,
                 model,
                 new AgentOptions(),
-                observer);
+                observer,
+                mcpUrl);
 
             await agent.RunAsync(msgs, memoryFile);
         });
