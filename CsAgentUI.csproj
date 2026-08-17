@@ -48,8 +48,6 @@
     <Using Include="DirectN.Extensions" />
     <Using Include="DirectN.Extensions.Com" />
     <Using Include="DirectN.Extensions.Utilities" />
-    <Using Include="WebView2" />
-    <Using Include="WebView2.Utilities" />
     <Using Alias="DirectNConstants" Include="DirectN.Constants" />
     <Using Alias="DirectNFunctions" Include="DirectN.Functions" />
   </ItemGroup>
@@ -65,6 +63,7 @@
 
   <ItemGroup>
     <PackageReference Include="AOTrino" Version="1.1.1" />
+    <PackageReference Include="ModelContextProtocol" Version="1.0.0" />
   </ItemGroup>
 
   <ItemGroup>
