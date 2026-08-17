@@ -2,6 +2,7 @@ using CsAgentUI.Shared;
 using CsAgentUI.src.Presentation.Desktop;
 using System.Reflection;
 using System.Runtime.InteropServices.Marshalling;
+using WebView2;
 
 namespace CsAgentUI.Presentation.Desktop;
 
