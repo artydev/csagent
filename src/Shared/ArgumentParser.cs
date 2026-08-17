@@ -6,6 +6,7 @@ namespace CsAgentUI.Shared;
 public sealed record AgentArguments(
     string MemoryFile,
     string? ModelOverride,
+    string? McpUrl,
     int Port,
     bool IsUiMode,
     bool IsNativeMode,
@@ -31,9 +32,11 @@ public static class ArgumentParser
         var showDoc = args.Contains("--doc");
         var memFile = GetMemoryFile(args);
         var modelOverride = GetModelOverride(args);
+        var mcpUrl = GetValue(args, "--mcp", "--mcp-url")
+                     ?? Environment.GetEnvironmentVariable("CSAGENT_MCP_URL");
         var port = GetPort(args);
 
-        return new AgentArguments(memFile, modelOverride, port, isUiMode, isNativeMode, isDesktopMode, isDryRun, showHelp, showVersion, showDoc);
+        return new AgentArguments(memFile, modelOverride, mcpUrl, port, isUiMode, isNativeMode, isDesktopMode, isDryRun, showHelp, showVersion, showDoc);
     }
 
     private static string GetMemoryFile(string[] args)
@@ -41,16 +44,28 @@ public static class ArgumentParser
         for (int i = 0; i < args.Length; i++)
             if (args[i] == "--mem" && i + 1 < args.Length) return args[i + 1];
 
-        foreach (var arg in args)
-            if (arg != "--ui" && arg != "--native" && arg != "--desktop" && arg != "--dry-run" && !arg.StartsWith("-")) return arg;
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (args[i] is "--model" or "--mcp" or "--mcp-url" or "--port" or "-p")
+            {
+                i++;
+                continue;
+            }
+
+            if (args[i] != "--ui" && args[i] != "--native" && args[i] != "--desktop" && args[i] != "--dry-run" && !args[i].StartsWith("-"))
+                return args[i];
+        }
 
         return "agent_memory.json";
     }
 
-    private static string? GetModelOverride(string[] args)
+    private static string? GetModelOverride(string[] args) => GetValue(args, "--model");
+
+    private static string? GetValue(string[] args, params string[] names)
     {
-        for (int i = 0; i < args.Length; i++)
-            if (args[i] == "--model" && i + 1 < args.Length) return args[i + 1];
+        for (int i = 0; i < args.Length - 1; i++)
+            if (names.Contains(args[i], StringComparer.OrdinalIgnoreCase))
+                return args[i + 1];
         return null;
     }
 
