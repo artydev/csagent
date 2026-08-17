@@ -35,36 +35,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="src\Presentation\Desktop\assets\app - Copier.js" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Using Include="AOTrino" />
-    <Using Include="AOTrino.Bridge" />
-    <Using Include="AOTrino.Input" />
-    <Using Include="AOTrino.Resources" />
-    <Using Include="AOTrino.Utilities" />
-    <Using Include="DirectN" />
-    <Using Include="DirectN.Extensions" />
-    <Using Include="DirectN.Extensions.Com" />
-    <Using Include="DirectN.Extensions.Utilities" />
-    <Using Include="WebView2" />
-    <Using Include="WebView2.Utilities" />
-    <Using Alias="DirectNConstants" Include="DirectN.Constants" />
-    <Using Alias="DirectNFunctions" Include="DirectN.Functions" />
-  </ItemGroup>
-
-  <ItemGroup>
     <EmbeddedResource Include="src\Presentation\Web\assets\index.html" />
     <EmbeddedResource Include="src\Presentation\Web\assets\app.js" />
     <EmbeddedResource Include="src\Presentation\Web\assets\styles.css" />
-    <EmbeddedResource Include="src\Presentation\Desktop\assets\index.html" />
-    <EmbeddedResource Include="src\Presentation\Desktop\assets\app.js" />
-    <EmbeddedResource Include="src\Presentation\Desktop\assets\styles.css" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="AOTrino" Version="1.1.1" />
   </ItemGroup>
 
   <ItemGroup>
