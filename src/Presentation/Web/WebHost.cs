@@ -20,13 +20,15 @@ public static class WebHost
         app.MapGet("/app.js", () => Results.Content(StaticAssets.JsUI, "application/javascript"));
         app.MapGet("/styles.css", () => Results.Content(StaticAssets.CssUI, "text/css"));
 
-        app.MapEndpoints(args.MemoryFile, args.ModelOverride);
+        app.MapEndpoints(args.MemoryFile, args.ModelOverride, args.McpUrl);
 
         var url = $"http://localhost:{args.Port}";
 
         app.Lifetime.ApplicationStarted.Register(() =>
         {
             Console.WriteLine($"\n--- Server started at {url} ---");
+            if (!string.IsNullOrWhiteSpace(args.McpUrl))
+                Console.WriteLine($"--- MCP endpoint: {args.McpUrl} ---");
             try
             {
                 Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
