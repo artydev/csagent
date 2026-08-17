@@ -26,6 +26,8 @@ public static class TuiHost
 
         var model = args.ModelOverride ?? LlmSettings.Model;
         Console.WriteLine($"  Model: {model}");
+        if (!string.IsNullOrWhiteSpace(args.McpUrl))
+            Console.WriteLine($"  MCP: {args.McpUrl}");
         if (args.IsDryRun)
             Console.WriteLine("  Dry-run: ON (no changes will be made)");
         Console.WriteLine();
@@ -35,7 +37,8 @@ public static class TuiHost
             LlmSettings.Endpoint,
             model,
             new AgentOptions(Confirm: true, DryRun: args.IsDryRun),
-            new ConsoleObserver());
+            new ConsoleObserver(),
+            args.McpUrl);
 
         while (true)
         {
