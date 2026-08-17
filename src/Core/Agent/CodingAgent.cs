@@ -9,13 +9,24 @@ public sealed class CodingAgent : IDisposable
     private readonly LlmClient _client;
     private readonly AgentOptions _opts;
     private readonly IAgentObserver _observer;
+    private readonly McpClient? _mcp;
+    private JsonArray? _toolDefinitions;
     private CancellationTokenSource? _cts;
 
-    public CodingAgent(string apiKey, string endpoint, string model, AgentOptions opts, IAgentObserver observer)
+    public CodingAgent(
+        string apiKey,
+        string endpoint,
+        string model,
+        AgentOptions opts,
+        IAgentObserver observer,
+        string? mcpUrl = null)
     {
         _opts = opts;
         _observer = observer;
         _client = new LlmClient(apiKey, endpoint, model);
+
+        if (!string.IsNullOrWhiteSpace(mcpUrl))
+            _mcp = new McpClient(mcpUrl);
     }
 
     // ── Main loop ────────────────────────────────────────────────────────────
@@ -25,7 +36,28 @@ public sealed class CodingAgent : IDisposable
         _cts = new CancellationTokenSource();
         var isWindows = OperatingSystem.IsWindows();
 
-        // Callback used by the switch_model tool to change the active model.
+        if (_mcp is not null && !_mcp.Tools.Any())
+        {
+            try
+            {
+                await _mcp.ConnectAsync(_cts.Token);
+                _toolDefinitions = MergeToolDefinitions(
+                    ToolDispatcher.ToolDefinitions,
+                    _mcp.GetOpenAiToolDefinitions());
+
+                await _observer.OnThought($"MCP connected: {_mcp.Tools.Count} tool(s) available.");
+            }
+            catch (Exception ex)
+            {
+                await _observer.OnError($"MCP connection error: {ex.Message}");
+                return;
+            }
+        }
+        else
+        {
+            _toolDefinitions = ToolDispatcher.ToolDefinitions;
+        }
+
         ToolDispatcher.SwitchModelHandler switchModel = (model) =>
         {
             _client.Model = model;
@@ -40,7 +72,7 @@ public sealed class CodingAgent : IDisposable
             JsonNode response;
             try
             {
-                response = await _client.CompleteChatAsync(messages, ToolDispatcher.ToolDefinitions, _cts.Token);
+                response = await _client.CompleteChatAsync(messages, _toolDefinitions, _cts.Token);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -94,6 +126,10 @@ public sealed class CodingAgent : IDisposable
                 {
                     result = "[dry-run] Tool not executed.";
                 }
+                else if (_mcp is not null && _mcp.Contains(funcName))
+                {
+                    result = await _mcp.CallToolAsync(funcName, argsRaw, _cts.Token);
+                }
                 else if (_opts.Confirm && ToolDispatcher.IsDestructive(funcName))
                 {
                     result = UI.Confirm($"Allow destructive action '{funcName}'?")
@@ -109,7 +145,6 @@ public sealed class CodingAgent : IDisposable
                            || result.StartsWith("Shell error:", StringComparison.OrdinalIgnoreCase);
 
                 await _observer.OnToolResult(result, isError);
-
                 messages.Add(JsonHelpers.ToolResult(callId, result));
             }
 
@@ -120,7 +155,28 @@ public sealed class CodingAgent : IDisposable
         await _observer.OnError($"Reached maximum of {_opts.MaxSteps} steps without completing.");
     }
 
-    public void Dispose() => _client.Dispose();
+    private static JsonArray MergeToolDefinitions(JsonArray native, JsonArray mcp)
+    {
+        var merged = new JsonArray();
+        var names = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var definition in native.Concat(mcp))
+        {
+            var name = definition?["function"]?["name"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(name) || !names.Add(name))
+                continue;
+            merged.Add(definition.DeepClone());
+        }
+        return merged;
+    }
+
+    public void Dispose()
+    {
+        _cts?.Dispose();
+        _mcp?.Dispose();
+        _client.Dispose();
+    }
+
     public void Cancel() => _cts?.Cancel();
 
     // ── System message ───────────────────────────────────────────────────────
@@ -139,6 +195,7 @@ public sealed class CodingAgent : IDisposable
             - Use write_file for all file creation and modification.
             - Use sh for builds, tests, package installs, and system commands.
             - Use switch_model to change the active model when the user asks to switch models.
+            - MCP tools are remote tools. Use them when their description matches the task.
             - If a command fails, analyse the error and retry with a fix.
             - When the task is fully complete, say exactly "Task complete." and stop.
             - Never silently swallow errors.
