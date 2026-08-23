@@ -9,7 +9,8 @@ public static class Program
 {
     public const string Version = "0.3.0";
 
-    public static async Task<int> Main(string[] args)
+    [STAThread]
+    public static int Main(string[] args)
     {
         var parsed = ArgumentParser.Parse(args);
 
@@ -51,7 +52,7 @@ public static class Program
         else
         {
             // Default: Terminal UI mode
-            await TuiHost.RunAsync(parsed);
+            TuiHost.RunAsync(parsed).GetAwaiter().GetResult();
         }
 
         return 0;
