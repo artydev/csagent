@@ -51,7 +51,7 @@ public static class HelpDisplay
         Console.ResetColor();
         Console.WriteLine("    (no flag)     CLI mode — interactive terminal session");
         Console.WriteLine("    --ui          Web UI mode — starts a web server");
-        Console.WriteLine("    --desktop     Desktop window mode — Photino native window (Windows only)");
+        Console.WriteLine("    --desktop     Desktop window mode — Photino native window (cross-platform)");
         Console.WriteLine("    --native      Native window mode — AOTrino WebView2 window (Windows only)");
         Console.WriteLine();
 

@@ -34,13 +34,7 @@ public static class Program
 
         if (parsed.IsDesktopMode)
         {
-            // Desktop window mode - Photino native window (Windows only)
-            if (!OperatingSystem.IsWindows())
-            {
-                Console.Error.WriteLine("Error: --desktop mode is only supported on Windows.");
-                return 1;
-            }
-
+            // Desktop window mode - Photino native window (cross-platform)
             PhotinoHost.Run(parsed);
             return 0;
         }
