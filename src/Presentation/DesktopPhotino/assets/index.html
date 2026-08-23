@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CSAgent Console</title>
-    <style>{{Style}}
-    </style>
+    <title>CSAgent Desktop</title>
+
+    <!-- Local styles served via the custom app:// scheme -->
+    <link href="app://styles.css" rel="stylesheet" />
 
     <!-- Prism.js Dracula Theme -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dracula.min.css" rel="stylesheet" />
@@ -37,17 +38,15 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nasm.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-php.min.js"></script>
-
 </head>
-<body style="background-color: #1e1e1e; color: #d4d4d4;">
-    
+<body>
     <div class="container">
-        <header data-aotrino-drag  style="cursor:grab">
+        <header>
             <div class="brand">
                 <h2>
                     <span class="status-dot"></span>
-                   
-                    <span class="version">v0.3</span>
+                    <span>CSAgent</span>
+                    <span class="version" id="version-label">Desktop</span>
                 </h2>
             </div>
             <div>
@@ -58,15 +57,16 @@
                 <span id="step-counter">Ready</span>
             </div>
         </header>
-        <div id="log" style="line-height:4rem;  color:mediumvioletred;font-size:1rem;font-family:'Segoe UI'"></div>
+        <div id="log"></div>
         <div class="input-area">
             <input id="in"
                    autocomplete="off"
                    placeholder="Ask CSAgent anything... (All destructive actions require approval)"
                    onkeypress="if(event.key==='Enter'){run();}">
         </div>
-       
     </div>
-    <script>{{Script}}</script>
+
+    <!-- Local app logic served via the custom app:// scheme -->
+    <script src="app://app.js"></script>
 </body>
 </html>

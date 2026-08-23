@@ -1,11 +1,15 @@
 // =============================================================================
-// CSAgent Console — Frontend Application
+// CSAgent Photino — Frontend Application
 // =============================================================================
 // Responsibilities:
 //   1. Parse Markdown and apply Prism syntax highlighting
-//   2. Handle user input and SSE (Server-Sent Events) chat stream
+//   2. Communicate with .NET via Photino's message-passing bridge
 //   3. Render messages into the log container
 //   4. Display step counter in the header
+//
+// Bridge protocol (see PhotinoAPI.cs):
+//   JS → .NET : window.external.sendMessage(JSON.stringify(payload))
+//   .NET → JS : window.external.receiveMessage(jsonString)
 // =============================================================================
 
 // -----------------------------------------------------------------------------
@@ -40,9 +44,6 @@ function normaliseLanguageClass(className) {
 
 /**
  * Ensure Prism language aliases are set up globally.
- *
- * Prism's 'markup' grammar covers HTML, XML and SVG, but it does not
- * register 'html' or 'xml' as top-level language keys by default.
  */
 function ensurePrismAliases() {
     if (typeof Prism === "undefined") return;
@@ -93,12 +94,13 @@ function parseMarkdown(text) {
 /**
  * Create a DOM element for a "done" message (task completed).
  *
+ * @param {string} message — Optional completion message
  * @returns {HTMLDivElement}
  */
-function createDoneMessage() {
+function createDoneMessage(message) {
     const div = document.createElement("div");
     div.className = "done";
-    div.innerText = "✓ Task completed successfully";
+    div.innerText = message ? "✓ " + message : "✓ Task completed successfully";
     return div;
 }
 
@@ -203,9 +205,7 @@ function createToolCallMessage(name, argsJson) {
  * Create a DOM element for a tool result message.
  *
  * Tool results are raw data (file contents, command output, errors),
- * NOT Markdown. They are displayed as plain text in a code block
- * to avoid Markdown rendering issues (e.g. '#' in file contents
- * being treated as headings).
+ * NOT Markdown. They are displayed as plain text in a code block.
  *
  * @param {string} content — The raw result text
  * @param {boolean} isError — Whether this is an error result
@@ -252,7 +252,7 @@ function createGenericMessage(type, content) {
 }
 
 /**
- * Route an incoming SSE message to the correct renderer and append it to the log.
+ * Route an incoming message to the correct renderer and append it to the log.
  *
  * @param {object} message — Parsed JSON object with `type` and `data` fields
  * @param {HTMLElement} log — The log container element
@@ -262,7 +262,9 @@ function appendMessageToLog(message, log) {
 
     switch (message.type) {
         case "done":
-            element = createDoneMessage();
+            element = createDoneMessage(
+                typeof message.data === "string" ? message.data : undefined
+            );
             break;
         case "warning":
             element = createWarningMessage(
@@ -275,17 +277,17 @@ function appendMessageToLog(message, log) {
             );
             break;
         case "call":
-            // Tool call messages have data: { n: toolName, a: argsJson }
-            if (message.data && typeof message.data === "object" && message.data.n) {
-                element = createToolCallMessage(message.data.n, message.data.a);
+            // Tool call messages have data: { name, args }
+            if (message.data && typeof message.data === "object" && message.data.name) {
+                element = createToolCallMessage(message.data.name, message.data.args);
             } else {
                 element = createGenericMessage(message.type, JSON.stringify(message.data));
             }
             break;
         case "result":
-            // Tool result messages have data: { r: resultText, e: isError }
-            if (message.data && typeof message.data === "object" && "r" in message.data) {
-                element = createToolResultMessage(message.data.r, message.data.e);
+            // Tool result messages have data: { result, isError }
+            if (message.data && typeof message.data === "object" && "result" in message.data) {
+                element = createToolResultMessage(message.data.result, message.data.isError);
             } else {
                 element = createGenericMessage(message.type, JSON.stringify(message.data));
             }
@@ -318,7 +320,6 @@ function scrollToBottom(log) {
  * Update the step counter in the header.
  *
  * The step event data has the shape { n: currentStep, m: maxSteps }.
- * When the task is done or an error occurs, reset to "Ready".
  *
  * @param {object} data — The step data object
  */
@@ -357,60 +358,116 @@ function appendUserMessage(prompt, log) {
 }
 
 // -----------------------------------------------------------------------------
-// SECTION 5 — SSE (Server-Sent Events) Stream
+// SECTION 5 — Photino Message Bridge
 // -----------------------------------------------------------------------------
 
 /**
- * Open an SSE connection to the chat endpoint and wire up event handlers.
+ * Send a JSON payload from JS to .NET via Photino's message bridge.
  *
- * @param {string} prompt — The user's input prompt
- * @param {HTMLElement} log — The log container element
- * @returns {EventSource}
+ * @param {object} payload — The message object (e.g. { type: "chat", prompt })
  */
-function startChatStream(prompt, log) {
+function sendToDotnet(payload) {
+    if (window.external && typeof window.external.sendMessage === "function") {
+        window.external.sendMessage(JSON.stringify(payload));
+    } else {
+        console.error("Photino bridge unavailable: window.external.sendMessage not found.");
+    }
+}
 
-    alert("Starting chat stream with prompt: " + prompt); // Debugging alert")
+/**
+ * Handle a single message received from .NET.
+ *
+ * .NET wraps agent events as { type: "event", event: <name>, data: <payload> }.
+ * Direct responses (info/error) arrive as { type: "info"|"error", data: ... }.
+ *
+ * @param {object} msg — The parsed message object
+ */
+function handleDotnetMessage(msg) {
+    if (!msg || typeof msg !== "object") return;
 
-    return;
+    const log = document.getElementById("log");
 
-    const url = `/api/chat?prompt=${encodeURIComponent(prompt)}`;
+    // Agent events are wrapped in { type: "event", event: <name>, data: <payload> }
+    if (msg.type === "event" && msg.event) {
+        const data = msg.data;
 
-    const stream = new EventSource(url);
-
-    stream.onmessage = function (event) {
-        const message = JSON.parse(event.data);
-
-        // Handle step events in the header counter, not in the log
-        if (message.type === "step") {
-            updateStepCounter(message.data);
-            return;
+        switch (msg.event) {
+            case "step":
+                updateStepCounter(data);
+                return;
+            case "message":
+                // data: { type: "thought"|"warning", data: text }
+                if (data && typeof data === "object" && data.type) {
+                    if (data.type === "warning") {
+                        appendMessageToLog({ type: "warning", data: data.data }, log);
+                    } else {
+                        appendMessageToLog({ type: "thought", data: data.data }, log);
+                    }
+                }
+                break;
+            case "call":
+                appendMessageToLog({ type: "call", data }, log);
+                break;
+            case "result":
+                appendMessageToLog({ type: "result", data }, log);
+                break;
+            case "done":
+                appendMessageToLog({ type: "done", data: data && data.message }, log);
+                resetStepCounter();
+                break;
+            case "danger":
+                appendMessageToLog(
+                    { type: "danger", data: data && data.message },
+                    log
+                );
+                resetStepCounter();
+                break;
+            default:
+                appendMessageToLog({ type: msg.event, data }, log);
+                break;
         }
 
-        appendMessageToLog(message, log);
         scrollToBottom(log);
+        return;
+    }
 
-        if (message.type === "done" || message.type === "error" || message.type === "danger") {
+    // Direct responses from .NET
+    switch (msg.type) {
+        case "info":
+            // data: { machineName, userName, exePath }
+            if (msg.data && typeof msg.data === "object") {
+                const versionLabel = document.getElementById("version-label");
+                if (versionLabel && msg.data.userName) {
+                    versionLabel.textContent = msg.data.userName;
+                }
+            }
+            break;
+        case "error":
+            appendMessageToLog({ type: "danger", data: msg.data }, log);
             resetStepCounter();
-            stream.close();
-        }
-    };
-
-    stream.onerror = function () {
-        console.error("SSE connection error — closing stream.");
-        resetStepCounter();
-        stream.close();
-    };
-
-    return stream;
+            scrollToBottom(log);
+            break;
+        default:
+            break;
+    }
 }
 
-
-
-
-function startDesktopChat(prompt, log) {
-    let exe_path = d.ExePath
-    document.getElementById("log").innerHTML = `<b>Environment.ProcessPath: ${exe_path}</b>`
-}
+/**
+ * Register the .NET → JS receive handler.
+ *
+ * Photino invokes window.external.receiveMessage(jsonString) whenever .NET
+ * calls window.SendMessage(jsonString).
+ */
+window.external.receiveMessage = function (json) {
+    let msg;
+    try {
+        msg = JSON.parse(json);
+    } catch {
+        console.error("Failed to parse message from .NET:", json);
+        return;
+    }
+    handleDotnetMessage(msg);
+};
 
 // -----------------------------------------------------------------------------
 // SECTION 6 — Main Entry Point
@@ -418,28 +475,8 @@ function startDesktopChat(prompt, log) {
 
 /**
  * Main entry point — called when the user presses Enter in the input field.
- *
+ * Sends the prompt to .NET via the Photino bridge.
  */
-
-// capture JS console.* into .NET → routes to AOTrinoApplication.Trace* (see HostApi.OnConsoleLog)
-if (window.chrome && chrome.webview && chrome.webview.hostObjects) {
-
-    const dotnet = chrome.webview.hostObjects.dotnet; // async proxy, fire-and-forget
-
-    for (const level of ["log", "info", "warn", "error", "debug"]) {
-        const orig = console[level].bind(console);
-        console[level] = (...args) => {
-            try { dotnet.OnConsoleLog(level, args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ")); } catch { }
-            orig(...args);
-        };
-    }
-}
-
-
-const sync = () => chrome.webview.hostObjects.sync.dotnet;
-const async = () => chrome.webview.hostObjects.dotnet;
-const d = sync();
-
 function run() {
     const input = document.getElementById("in");
     const prompt = input.value.trim();
@@ -451,7 +488,8 @@ function run() {
     input.value = "";
     scrollToBottom(log);
 
-
+    sendToDotnet({ type: "chat", prompt });
 }
 
-startDesktopChat(prompt, log);
+// Request machine/user/exe info from .NET on startup (renders into the header).
+sendToDotnet({ type: "getInfo" });

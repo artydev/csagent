@@ -35,7 +35,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="src\Presentation\Desktop\assets\app - Copier.js" />
+    <!-- Standalone tool projects and build output must not be compiled into the app. -->
+    <Compile Remove="tools\**\*.cs" />
+    <Compile Remove="obj\**\*.cs" />
+    <Compile Remove="bin\**\*.cs" />
+    <EmbeddedResource Remove="tools\**" />
+    <None Remove="tools\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -56,14 +61,15 @@
     <EmbeddedResource Include="src\Presentation\Web\assets\index.html" />
     <EmbeddedResource Include="src\Presentation\Web\assets\app.js" />
     <EmbeddedResource Include="src\Presentation\Web\assets\styles.css" />
-    <EmbeddedResource Include="src\Presentation\Desktop\assets\index.html" />
-    <EmbeddedResource Include="src\Presentation\Desktop\assets\app.js" />
-    <EmbeddedResource Include="src\Presentation\Desktop\assets\styles.css" />
+    <EmbeddedResource Include="src\Presentation\DesktopPhotino\assets\index.html" />
+    <EmbeddedResource Include="src\Presentation\DesktopPhotino\assets\app.js" />
+    <EmbeddedResource Include="src\Presentation\DesktopPhotino\assets\styles.css" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="AOTrino" Version="1.1.1" />
     <PackageReference Include="ModelContextProtocol" Version="1.0.0" />
+    <PackageReference Include="Photino.NET" Version="4.0.16" />
   </ItemGroup>
 
   <ItemGroup>

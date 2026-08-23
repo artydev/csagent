@@ -1,0 +1,16 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!--
+    Workaround for environments where MSBuild cannot spawn an out-of-proc
+    task host (TaskHostFactory) for the ILLink 'ComputeManagedAssemblies' task
+    (error MSB4018: "Cannot acquire required number of nodes" / "Access denied").
+
+    Redefining the UsingTask with the default (in-proc) TaskFactory lets the
+    trimming/AOT publish run entirely inside the main MSBuild node.
+  -->
+
+  <UsingTask TaskName="ComputeManagedAssemblies"
+             AssemblyFile="$(ILLinkTasksAssembly)"
+             Condition="'$(ILLinkTasksAssembly)' != ''" />
+
+</Project>
