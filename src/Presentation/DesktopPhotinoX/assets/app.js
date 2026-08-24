@@ -1,13 +1,13 @@
 // =============================================================================
-// CSAgent Photino — Frontend Application
+// CSAgent PhotinoX — Frontend Application
 // =============================================================================
 // Responsibilities:
 //   1. Parse Markdown and apply Prism syntax highlighting
-//   2. Communicate with .NET via Photino's message-passing bridge
+//   2. Communicate with .NET via PhotinoX's message-passing bridge
 //   3. Render messages into the log container
 //   4. Display step counter in the header
 //
-// Bridge protocol (see PhotinoAPI.cs):
+// Bridge protocol (see PhotinoXAPI.cs):
 //   JS → .NET : window.external.sendMessage(JSON.stringify(payload))
 //   .NET → JS : window.external.receiveMessage(jsonString)
 // =============================================================================

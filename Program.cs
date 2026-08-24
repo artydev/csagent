@@ -1,4 +1,4 @@
-using CsAgentUI.Presentation.DesktopPhotino;
+using CsAgentUI.Presentation.DesktopPhotinoX;
 using CsAgentUI.Presentation.Tui;
 using CsAgentUI.Presentation.Web;
 using CsAgentUI.Shared;
@@ -32,10 +32,10 @@ public static class Program
             return 0;
         }
 
-        if (parsed.IsDesktopMode)
+        if (parsed.IsDesktopXMode)
         {
-            // Desktop window mode - Photino native window (cross-platform)
-            PhotinoHost.Run(parsed);
+            // DesktopX window mode - PhotinoX native window (cross-platform)
+            PhotinoXHost.Run(parsed);
             return 0;
         }
         else if (parsed.IsUiMode)

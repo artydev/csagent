@@ -1,20 +1,28 @@
+extern alias PhotinoX;
+
 using System.Drawing;
 using System.Reflection;
 using System.Text;
 using CsAgentUI.Shared;
-using Photino.NET;
+using PhotinoApplication = PhotinoX::Photino.NET.PhotinoApplication;
+using PhotinoWindow = PhotinoX::Photino.NET.PhotinoWindow;
 
-namespace CsAgentUI.Presentation.DesktopPhotino;
+namespace CsAgentUI.Presentation.DesktopPhotinoX;
 
 /// <summary>
-/// Photino window host — opens a native window and loads the CSAgent UI from
+/// PhotinoX window host — opens a native window and loads the CSAgent UI from
 /// embedded assets by injecting HTML directly.
-/// Launched with the "--desktop" argument.
+/// Launched with the "--desktopx" argument.
+///
+/// PhotinoX differs from Photino.NET in its hosting model: instead of calling
+/// <c>WaitForClose()</c> on the window, you create a <see cref="PhotinoApplication"/>
+/// and pass the main window to <c>Run(window)</c>, which pumps the message loop
+/// until the window closes.
 /// </summary>
-public static class PhotinoHost
+public static class PhotinoXHost
 {
     /// <summary>
-    /// Runs the agent inside a native Photino window.
+    /// Runs the agent inside a native PhotinoX window.
     /// Called from [STAThread] Main on Windows.
     /// </summary>
     public static void Run(AgentArguments args)
@@ -32,9 +40,9 @@ public static class PhotinoHost
 
         // Load embedded resources as strings
         Console.WriteLine("Loading embedded resources...");
-        var indexHtml = LoadResourceAsString("CsAgentUI.src.Presentation.DesktopPhotino.assets.index.html");
-        var appJs = LoadResourceAsString("CsAgentUI.src.Presentation.DesktopPhotino.assets.app.js");
-        var stylesCss = LoadResourceAsString("CsAgentUI.src.Presentation.DesktopPhotino.assets.styles.css");
+        var indexHtml = LoadResourceAsString("CsAgentUI.src.Presentation.DesktopPhotinoX.assets.index.html");
+        var appJs = LoadResourceAsString("CsAgentUI.src.Presentation.DesktopPhotinoX.assets.app.js");
+        var stylesCss = LoadResourceAsString("CsAgentUI.src.Presentation.DesktopPhotinoX.assets.styles.css");
 
         if (string.IsNullOrEmpty(indexHtml))
         {
@@ -43,35 +51,28 @@ public static class PhotinoHost
             return;
         }
 
-
         // Inject CSS and JS into HTML
         var htmlContent = InjectAssetsIntoHtml(indexHtml, stylesCss, appJs);
 
-  
+        // Create the PhotinoX application and main window.
+        var app = new PhotinoApplication();
 
-        // Create window with direct HTML string using StartString property
         var window = new PhotinoWindow()
         {
-            Title = "CSAgent Desktop",
+            Title = "CSAgent DesktopX",
             Width = 1280,
             Height = 800,
             StartString = htmlContent  // ✅ Use StartString property for HTML
         };
 
-        // Center the window
-    
-        
-
-        Console.WriteLine("✓ Photino window created");
+        Console.WriteLine("✓ PhotinoX window created");
 
         // Wire the bridge: JS → .NET via HandleMessage, .NET → JS via SendWebMessage.
-        var api = new PhotinoAPI(window, args);
-        window.RegisterWebMessageReceivedHandler((sender, message) => api.HandleMessage(message));
+        var api = new PhotinoXAPI(window, args);
+        window.RegisterWebMessageReceivedHandler((sender, e) => api.HandleMessage(e.Message));
 
-        // Show and wait
-    
-        
-        window.WaitForClose();
+        // Run the message loop until the window closes (PhotinoX hosting model).
+        app.Run(window);
         api.Dispose();
     }
 
@@ -138,7 +139,7 @@ public static class PhotinoHost
         var resources = assembly.GetManifestResourceNames();
 
         var relevant = resources
-            .Where(r => r.Contains("DesktopPhotino") || r.Contains("assets"))
+            .Where(r => r.Contains("DesktopPhotinoX") || r.Contains("assets"))
             .ToList();
 
         if (relevant.Any())
@@ -148,7 +149,7 @@ public static class PhotinoHost
         }
         else
         {
-            Console.Error.WriteLine("  (No DesktopPhotino or assets resources found)");
+            Console.Error.WriteLine("  (No DesktopPhotinoX or assets resources found)");
             Console.Error.WriteLine("\n=== First 30 Resources in Assembly ===");
             foreach (var res in resources.Take(30))
                 Console.Error.WriteLine($"  - {res}");

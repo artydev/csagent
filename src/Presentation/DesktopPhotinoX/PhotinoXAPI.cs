@@ -1,22 +1,24 @@
+extern alias PhotinoX;
+
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using CsAgentUI.Shared;
-using Photino.NET;
+using PhotinoWindow = PhotinoX::Photino.NET.PhotinoWindow;
 
-namespace CsAgentUI.Presentation.DesktopPhotino;
+namespace CsAgentUI.Presentation.DesktopPhotinoX;
 
 /// <summary>
-/// Photino bridge — exposes .NET functionality to the JavaScript UI running inside
-/// the Photino window, and allows .NET to push events back to the UI.
+/// PhotinoX bridge — exposes .NET functionality to the JavaScript UI running inside
+/// the PhotinoX window, and allows .NET to push events back to the UI.
 ///
-/// Photino does not expose arbitrary host objects like WebView2. Instead it uses a
+/// PhotinoX does not expose arbitrary host objects like WebView2. Instead it uses a
 /// message-passing model:
 ///   - JS → .NET:  window.external.sendMessage(jsonString) triggers HandleMessage.
-///   - .NET → JS:  window.SendMessage(jsonString) invokes window.external.receiveMessage.
+///   - .NET → JS:  window.SendWebMessage(jsonString) invokes window.external.receiveMessage.
 ///
 /// The bridge therefore implements a small JSON message protocol (see 3.1).
 /// </summary>
-public sealed class PhotinoAPI : IDisposable
+public sealed class PhotinoXAPI : IDisposable
 {
     private readonly PhotinoWindow _window;
     private readonly AgentArguments _args;
@@ -25,7 +27,7 @@ public sealed class PhotinoAPI : IDisposable
     private CodingAgent? _agent;
     private CancellationTokenSource? _cts;
 
-    public PhotinoAPI(PhotinoWindow window, AgentArguments args)
+    public PhotinoXAPI(PhotinoWindow window, AgentArguments args)
     {
         _window = window;
         _args = args;
@@ -112,7 +114,7 @@ public sealed class PhotinoAPI : IDisposable
                 LlmSettings.Endpoint,
                 _args.ModelOverride ?? LlmSettings.Model,
                 new AgentOptions(MaxSteps: 30, DryRun: _args.IsDryRun, Confirm: true),
-                new PhotinoObserver(this),
+                new PhotinoXObserver(this),
                 _args.McpUrl);
         }
 
@@ -211,11 +213,11 @@ public sealed class PhotinoAPI : IDisposable
 
     // ── Observer that forwards agent events to JS ────────────────────────────
 
-    private sealed class PhotinoObserver : IAgentObserver
+    private sealed class PhotinoXObserver : IAgentObserver
     {
-        private readonly PhotinoAPI _api;
+        private readonly PhotinoXAPI _api;
 
-        public PhotinoObserver(PhotinoAPI api) => _api = api;
+        public PhotinoXObserver(PhotinoXAPI api) => _api = api;
 
         public Task OnStep(int n, int m)
         {

@@ -36,11 +36,12 @@
 
   <ItemGroup>
     <!-- Standalone tool projects and build output must not be compiled into the app. -->
-    <Compile Remove="tools\**\*.cs" />
-    <Compile Remove="obj\**\*.cs" />
-    <Compile Remove="bin\**\*.cs" />
-    <EmbeddedResource Remove="tools\**" />
-    <None Remove="tools\**" />
+    <Compile Remove="tools/**/*.cs" />
+    <Compile Remove="obj/**/*.cs" />
+    <Compile Remove="bin/**/*.cs" />
+    <Compile Remove="vendor/**/*.cs" />
+    <EmbeddedResource Remove="tools/**" />
+    <None Remove="tools/**" />
   </ItemGroup>
 
 
@@ -48,14 +49,23 @@
     <EmbeddedResource Include="src\Presentation\Web\assets\index.html" />
     <EmbeddedResource Include="src\Presentation\Web\assets\app.js" />
     <EmbeddedResource Include="src\Presentation\Web\assets\styles.css" />
-    <EmbeddedResource Include="src\Presentation\DesktopPhotino\assets\index.html" />
-    <EmbeddedResource Include="src\Presentation\DesktopPhotino\assets\app.js" />
-    <EmbeddedResource Include="src\Presentation\DesktopPhotino\assets\styles.css" />
+    <EmbeddedResource Include="src\Presentation\DesktopPhotinoX\assets\index.html" />
+    <EmbeddedResource Include="src\Presentation\DesktopPhotinoX\assets\app.js" />
+    <EmbeddedResource Include="src\Presentation\DesktopPhotinoX\assets\styles.css" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="ModelContextProtocol" Version="1.0.0" />
-    <PackageReference Include="Photino.NET" Version="3.2.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- PhotinoX (maintained fork of Photino.NET) — vendored local project
+         reference (vendor/PhotinoX). Provides the PhotinoApplication hosting
+         model used by the desktopx mode. The PhotinoX API (5.x) is not published
+         to NuGet, so we vendor its source for portability. The PhotinoX code
+         references its types via an extern alias (PhotinoX) to keep the
+         namespace isolated. -->
+    <ProjectReference Include="vendor\PhotinoX\PhotinoX.csproj" Aliases="PhotinoX" />
   </ItemGroup>
 
   <ItemGroup>
