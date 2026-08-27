@@ -108,6 +108,9 @@ Program.cs  (point d'entrée — analyse des arguments + sélection du mode)
 5. La boucle se termine lorsque le LLM répond avec `finish_reason = "stop"` ou
    atteint le nombre maximal d'étapes.
 
+   <img width="1267" height="773" alt="image" src="https://github.com/user-attachments/assets/0ef746e2-a63d-4431-a1b7-8c8541e0b8f7" />
+
+
 ## Évolutions futures
 
 - **MCP (Model Context Protocol)** — prise en charge planifiée d'un serveur MCP
