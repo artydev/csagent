@@ -118,3 +118,9 @@ Program.cs  (point d'entrée — analyse des arguments + sélection du mode)
   sessions, envoyer des prompts, récupérer les réponses et les événements de
   l'agent (étapes, appels d'outils, résultats) de manière programmatique, par
   exemple via un module `csagent` ou un client de l'interface web (SSE).
+
+- **Mémoire vectorielle basée sur SQLite** — architecture de mémoire à long terme
+  fondée sur SQLite avec indexation vectorielle : stockage des conversations et
+  des connaissances dans une base locale, recherche sémantique par similarité
+  d'embedding, et récupération des contextes pertinents pour enrichir les prompts
+  de l'agent.
