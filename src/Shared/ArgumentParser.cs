@@ -25,7 +25,7 @@ public static class ArgumentParser
     {
         var isUiMode = args.Contains("--ui");
         var isNativeMode = args.Contains("--native");
-        var isDesktopXMode = args.Contains("--desktopx");
+        var isDesktopXMode = args.Contains("--desktop");
         var isDryRun = args.Contains("--dry-run");
         var showHelp = args.Contains("--help") || args.Contains("-h") || args.Contains("/?");
         var showVersion = args.Contains("--version");
@@ -52,7 +52,7 @@ public static class ArgumentParser
                 continue;
             }
 
-            if (args[i] != "--ui" && args[i] != "--native" && args[i] != "--desktopx" && args[i] != "--dry-run" && !args[i].StartsWith("-"))
+            if (args[i] != "--ui" && args[i] != "--native" && args[i] != "--desktop" && args[i] != "--dry-run" && !args[i].StartsWith("-"))
                 return args[i];
         }
 

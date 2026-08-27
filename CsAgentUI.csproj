@@ -61,7 +61,7 @@
   <ItemGroup>
     <!-- PhotinoX (maintained fork of Photino.NET) — vendored local project
          reference (vendor/PhotinoX). Provides the PhotinoApplication hosting
-         model used by the desktopx mode. The PhotinoX API (5.x) is not published
+         model used by the desktop mode. The PhotinoX API (5.x) is not published
          to NuGet, so we vendor its source for portability. The PhotinoX code
          references its types via an extern alias (PhotinoX) to keep the
          namespace isolated. -->

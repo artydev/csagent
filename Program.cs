@@ -34,7 +34,7 @@ public static class Program
 
         if (parsed.IsDesktopXMode)
         {
-            // DesktopX window mode - PhotinoX native window (cross-platform)
+            // Desktop window mode - PhotinoX native window (cross-platform)
             PhotinoXHost.Run(parsed);
             return 0;
         }

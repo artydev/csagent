@@ -6,7 +6,7 @@
     },
     "Desktop": {
       "commandName": "Project",
-      "commandLineArgs": "--desktopx",
+      "commandLineArgs": "--desktop",
       "nativeDebugging": false
     },
     "WebUI": {

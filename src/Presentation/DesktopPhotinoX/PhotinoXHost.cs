@@ -12,7 +12,7 @@ namespace CsAgentUI.Presentation.DesktopPhotinoX;
 /// <summary>
 /// PhotinoX window host — opens a native window and loads the CSAgent UI from
 /// embedded assets by injecting HTML directly.
-/// Launched with the "--desktopx" argument.
+/// Launched with the "--desktop" argument.
 ///
 /// PhotinoX differs from Photino.NET in its hosting model: instead of calling
 /// <c>WaitForClose()</c> on the window, you create a <see cref="PhotinoApplication"/>
