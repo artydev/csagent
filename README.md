@@ -118,3 +118,7 @@ Program.cs  (point d'entrée — analyse des arguments + sélection du mode)
   sessions, envoyer des prompts, récupérer les réponses et les événements de
   l'agent (étapes, appels d'outils, résultats) de manière programmatique, par
   exemple via un module `csagent` ou un client de l'interface web (SSE).
+
+
+  <img width="853" height="694" alt="image" src="https://github.com/user-attachments/assets/c0bb113d-b97b-42c0-b8d4-bd952c75ee93" />
+
