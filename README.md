@@ -113,3 +113,8 @@ Program.cs  (point d'entrée — analyse des arguments + sélection du mode)
 - **MCP (Model Context Protocol)** — prise en charge planifiée d'un serveur MCP
   distant via Streamable HTTP, avec découverte automatique de ses outils et
   exécution des appels MCP depuis la même boucle d'agent que les outils natifs.
+
+- **Scripting Python** — piloter CsAgent depuis des scripts Python : lancer des
+  sessions, envoyer des prompts, récupérer les réponses et les événements de
+  l'agent (étapes, appels d'outils, résultats) de manière programmatique, par
+  exemple via un module `csagent` ou un client de l'interface web (SSE).
