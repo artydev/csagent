@@ -1,4 +1,4 @@
-# CsAgent 
+# CsAgent
 
 Un agent de codage autonome multiplateforme écrit en C#/.NET 10. Il se connecte
 à un point de terminaison LLM compatible OpenAI et peut lire des fichiers,
@@ -7,7 +7,8 @@ accomplir des tâches de codage — le tout piloté par une boucle LLM.
 
 ## Fonctionnalités
 
-- **Trois interfaces** — terminal (CLI), interface web et fenêtre Windows native.
+- **Trois interfaces** — terminal (CLI), interface web et fenêtre de bureau
+  native (PhotinoX, multiplateforme).
 - **Boucle d'agent autonome** — le LLM planifie et exécute les appels d'outils
   étape par étape.
 - **Mémoire de conversation** — l'historique est conservé dans un fichier JSON
@@ -16,56 +17,63 @@ accomplir des tâches de codage — le tout piloté par une boucle LLM.
   modification.
 - **Sécurité** — les actions destructives nécessitent une confirmation ; les
   opérations sur les fichiers sont limitées au répertoire de travail courant.
-- **MCP distant** — connexion à un serveur MCP via Streamable HTTP, découverte
-  automatique de ses outils et exécution des appels MCP depuis la même boucle
-  d'agent que les outils natifs.
+- **Zéro dépendance NuGet** — le projet ne dépend d'aucun paquet externe ; la
+  fenêtre de bureau utilise PhotinoX, fourni en tant que projet local vendored.
 
-## MCP distant
-
-CsAgent accepte un endpoint MCP Streamable HTTP avec `--mcp` ou avec la variable
-d'environnement `CSAGENT_MCP_URL`.
-
-Exemple avec le serveur Prolog :
+## Démarrage rapide
 
 ```bash
-dotnet run -- --mcp https://prolog-mcp.mcphosting.app/mcp
-```
-
-ou :
-
-```bash
-export CSAGENT_MCP_URL=https://prolog-mcp.mcphosting.app/mcp
+# Mode CLI (terminal interactif)
 dotnet run
+
+# Interface web (port 5050 par défaut)
+dotnet run -- --ui
+
+# Fenêtre de bureau native (PhotinoX, multiplateforme)
+dotnet run -- --desktop
 ```
 
-Le client MCP effectue automatiquement `initialize`, `notifications/initialized`
-et `tools/list`, puis convertit les outils MCP en définitions de fonctions
-compatibles avec l'API LLM. Lorsqu'un modèle appelle un outil MCP, CsAgent utilise
-`tools/call` sur le serveur distant et renvoie le résultat au modèle.
+L'endpoint LLM compatible OpenAI est configuré dans `LlmSettings` (point de
+terminaison et modèle par défaut). La clé d'API est fournie via la variable
+d'environnement `ALBERT_API_KEY`.
 
-Aucune installation de Node.js ni copie locale de `prolog-mcp` n'est nécessaire.
+## Modes
 
-Les outils MCP sont fusionnés avec les outils natifs. Si un serveur MCP expose
-un nom qui entre en conflit avec un outil natif, l'outil natif est conservé.
+| Mode | Commande | Description |
+|------|----------|-------------|
+| CLI | `(aucun drapeau)` | Session terminale interactive |
+| Web | `--ui` | Serveur web ASP.NET avec SSE (port 5050 par défaut) |
+| Bureau | `--desktop` | Fenêtre native PhotinoX (multiplateforme) |
+
+## Options
+
+| Option | Description |
+|--------|-------------|
+| `--help`, `-h`, `/?` | Affiche l'aide et quitte |
+| `--version` | Affiche le numéro de version et quitte |
+| `--doc` | Affiche la documentation complète dans le terminal |
+| `--mem <fichier>` | Fichier de mémoire/conversation personnalisé (défaut : `agent_memory.json`) |
+| `--model <nom>` | Remplace le modèle LLM pour le mode courant |
+| `--port`, `-p <n>` | Port de l'interface web (défaut : 5050) |
+| `--dry-run` | Simule l'exécution des outils sans apporter de modification |
 
 ## Architecture
 
 CsAgentUI suit une architecture en couches simple, sans dépendances NuGet
-externes ajoutées pour MCP. Le point d'entrée (`Program.cs`) analyse les arguments
-de ligne de commande, puis sélectionne l'une des trois interfaces de présentation.
+externes. Le point d'entrée (`Program.cs`) analyse les arguments de ligne de
+commande, puis sélectionne l'une des trois interfaces de présentation.
 
 ```
 Program.cs  (point d'entrée — analyse des arguments + sélection du mode)
    │
-   ├── Presentation/Tui      → interface terminale (CLI)
-   ├── Presentation/Web      → interface web (serveur ASP.NET + SSE)
-   └── Presentation/Desktop  → fenêtre native (AOTrino WebView2, Windows)
+   ├── Presentation/Tui            → interface terminale (CLI)
+   ├── Presentation/Web            → interface web (serveur ASP.NET + SSE)
+   └── Presentation/DesktopPhotinoX → fenêtre native (PhotinoX, multiplateforme)
         │
         └── Core/Agent/CodingAgent   (boucle d'agent autonome)
              │
              ├── Core/Llm/LlmClient      → appels API LLM (compatible OpenAI)
              ├── Core/Agent/ToolDispatcher → outils natifs
-             ├── Core/Agent/McpClient       → MCP distant (Streamable HTTP)
              └── Core/Memory/MemoryStore → persistance de la conversation (JSON)
 ```
 
@@ -78,12 +86,9 @@ Program.cs  (point d'entrée — analyse des arguments + sélection du mode)
 - **`src/Core/`** — la logique métier indépendante de l'interface :
   - `Agent/CodingAgent` — la boucle principale : il envoie l'historique au LLM,
     traite les appels d'outils renvoyés, exécute chaque outil via le
-    `ToolDispatcher` ou `McpClient`, puis ajoute les résultats à la conversation.
+    `ToolDispatcher`, puis ajoute les résultats à la conversation.
   - `Agent/ToolDispatcher` — exécute les outils natifs et identifie les actions
     destructives.
-  - `Agent/McpClient` — client MCP minimal basé uniquement sur `HttpClient` et
-    `System.Text.Json.Nodes`; il supporte Streamable HTTP sans dépendance NuGet
-    supplémentaire.
   - `Llm/LlmClient` — client HTTP pour le point de terminaison LLM compatible
     OpenAI (chat completions).
   - `Llm/LlmSettings` — configuration du modèle et du point de terminaison.
@@ -95,13 +100,16 @@ Program.cs  (point d'entrée — analyse des arguments + sélection du mode)
 
 ### Flux d'exécution
 
-1. `Program.cs` analyse les arguments et choisit le mode (CLI, web ou natif).
-2. L'hôte de présentation crée un `CodingAgent` avec un observateur et, si
-   demandé, l'URL MCP.
-3. Au premier appel, `McpClient` initialise la session distante et découvre les
-   outils.
-4. Les définitions MCP sont ajoutées aux définitions natives envoyées au LLM.
-5. Si le LLM demande un outil MCP, CsAgent appelle `tools/call` sur le serveur.
-6. Le résultat est renvoyé au LLM comme résultat de tool call.
-7. La boucle se termine lorsque le LLM répond avec `finish_reason = "stop"` ou
+1. `Program.cs` analyse les arguments et choisit le mode (CLI, web ou bureau).
+2. L'hôte de présentation crée un `CodingAgent` avec un observateur.
+3. L'agent envoie l'historique de conversation au LLM.
+4. Si le LLM demande un appel d'outil, l'agent l'exécute via le
+   `ToolDispatcher` et renvoie le résultat au LLM.
+5. La boucle se termine lorsque le LLM répond avec `finish_reason = "stop"` ou
    atteint le nombre maximal d'étapes.
+
+## Évolutions futures
+
+- **MCP (Model Context Protocol)** — prise en charge planifiée d'un serveur MCP
+  distant via Streamable HTTP, avec découverte automatique de ses outils et
+  exécution des appels MCP depuis la même boucle d'agent que les outils natifs.
