@@ -19,7 +19,7 @@
 <rect x="450" y="180" width="300" height="70" rx="14" fill="#1b2741" stroke="#405274"/>
 <text x="600" y="207" text-anchor="middle" class="label">Web</text><text x="600" y="229" text-anchor="middle" class="small">ASP.NET + SSE</text>
 <rect x="820" y="180" width="300" height="70" rx="14" fill="#1b2741" stroke="#405274"/>
-<text x="970" y="207" text-anchor="middle" class="label">Desktop</text><text x="970" y="229" text-anchor="middle" class="small">PhotinoX / WebView</text>
+<text x="970" y="207" text-anchor="middle" class="label">Desktop</text><text x="970" y="229" text-anchor="middle" class="small">Fenêtre native</text>
 
 <!-- arrows -->
 <path d="M230 250 V315 H600" fill="none" stroke="#8ea0c8" stroke-width="2" marker-end="url(#arrow)"/>

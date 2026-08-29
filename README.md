@@ -8,7 +8,7 @@ accomplir des tâches de codage — le tout piloté par une boucle LLM.
 ## Fonctionnalités
 
 - **Trois interfaces** — terminal (CLI), interface web et fenêtre de bureau
-  native (PhotinoX, multiplateforme).
+  native (multiplateforme).
 - **Boucle d'agent autonome** — le LLM planifie et exécute les appels d'outils
   étape par étape.
 - **Mémoire de conversation** — l'historique est conservé dans un fichier JSON
@@ -17,8 +17,7 @@ accomplir des tâches de codage — le tout piloté par une boucle LLM.
   modification.
 - **Sécurité** — les actions destructives nécessitent une confirmation ; les
   opérations sur les fichiers sont limitées au répertoire de travail courant.
-- **Zéro dépendance NuGet** — le projet ne dépend d'aucun paquet externe ; la
-  fenêtre de bureau utilise PhotinoX, fourni en tant que projet local vendored.
+- **Zéro dépendance NuGet** — le projet ne dépend d'aucun paquet externe.
 
 ## Démarrage rapide
 
@@ -29,7 +28,7 @@ dotnet run
 # Interface web (port 5050 par défaut)
 dotnet run -- --ui
 
-# Fenêtre de bureau native (PhotinoX, multiplateforme)
+# Fenêtre de bureau native (multiplateforme)
 dotnet run -- --desktop
 ```
 
@@ -43,7 +42,7 @@ d'environnement `ALBERT_API_KEY`.
 |------|----------|-------------|
 | CLI | `(aucun drapeau)` | Session terminale interactive |
 | Web | `--ui` | Serveur web ASP.NET avec SSE (port 5050 par défaut) |
-| Bureau | `--desktop` | Fenêtre native PhotinoX (multiplateforme) |
+| Bureau | `--desktop` | Fenêtre native (multiplateforme) |
 
 ## Options
 
@@ -68,7 +67,7 @@ Program.cs  (point d'entrée — analyse des arguments + sélection du mode)
    │
    ├── Presentation/Tui            → interface terminale (CLI)
    ├── Presentation/Web            → interface web (serveur ASP.NET + SSE)
-   └── Presentation/DesktopPhotinoX → fenêtre native (PhotinoX, multiplateforme)
+   └── Presentation/Desktop → fenêtre native (multiplateforme)
         │
         └── Core/Agent/CodingAgent   (boucle d'agent autonome)
              │
