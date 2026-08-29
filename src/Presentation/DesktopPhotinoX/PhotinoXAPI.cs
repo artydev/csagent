@@ -26,7 +26,6 @@ public sealed class PhotinoXAPI : IDisposable
     public void HandleMessage(string raw)
     {
         if (_disposed) return;
-
         if (!BridgeProtocol.TryParse(raw, out var message, out var error))
         {
             Send(Guid.NewGuid().ToString("N"), MessageTypes.BridgeError, null,
@@ -38,21 +37,11 @@ public sealed class PhotinoXAPI : IDisposable
         {
             switch (message!.Type)
             {
-                case MessageTypes.InfoGet:
-                    SendInfo(message.Id);
-                    break;
-                case MessageTypes.SessionCreate:
-                    CreateSession(message);
-                    break;
-                case MessageTypes.SessionClose:
-                    CloseSession(message);
-                    break;
-                case MessageTypes.ChatStart:
-                    StartChat(message);
-                    break;
-                case MessageTypes.ChatCancel:
-                    CancelChat(message);
-                    break;
+                case MessageTypes.InfoGet: SendInfo(message.Id); break;
+                case MessageTypes.SessionCreate: CreateSession(message); break;
+                case MessageTypes.SessionClose: CloseSession(message); break;
+                case MessageTypes.ChatStart: StartChat(message); break;
+                case MessageTypes.ChatCancel: CancelChat(message); break;
                 case MessageTypes.ApprovalRespond:
                     Send(message.Id, MessageTypes.BridgeError, message.SessionId,
                         new JsonObject { ["message"] = "Interactive approval is not yet exposed by the agent core." });
@@ -84,7 +73,6 @@ public sealed class PhotinoXAPI : IDisposable
                     new JsonObject { ["message"] = "Session already exists." });
                 return;
             }
-
             _sessions[sessionId] = new AgentSession(sessionId, _args, _apiKey);
         }
 
@@ -124,7 +112,6 @@ public sealed class PhotinoXAPI : IDisposable
                 new JsonObject { ["message"] = "sessionId is required." });
             return;
         }
-
         if (string.IsNullOrWhiteSpace(_apiKey))
         {
             Send(message.Id, MessageTypes.AgentError, message.SessionId,
@@ -163,10 +150,9 @@ public sealed class PhotinoXAPI : IDisposable
 
     private async Task RunChatAsync(AgentSession session, string requestId, string prompt)
     {
-        var observer = new PhotinoXObserver(this, requestId, session.Id);
         try
         {
-            await session.RunAsync(prompt, observer);
+            await session.RunAsync(prompt, new PhotinoXObserver(this, requestId, session.Id));
         }
         catch (OperationCanceledException)
         {
@@ -190,9 +176,7 @@ public sealed class PhotinoXAPI : IDisposable
         }
 
         AgentSession? session;
-        lock (_gate)
-            _sessions.TryGetValue(message.SessionId, out session);
-
+        lock (_gate) _sessions.TryGetValue(message.SessionId, out session);
         if (session is null)
         {
             Send(message.Id, MessageTypes.BridgeError, message.SessionId,
@@ -201,7 +185,7 @@ public sealed class PhotinoXAPI : IDisposable
         }
 
         session.Cancel();
-        Send(message.Id, MessageTypes.AgentCancelled, message.SessionId,
+        Send(message.Id, MessageTypes.ChatCancelAccepted, message.SessionId,
             new JsonObject { ["reason"] = "user" });
     }
 
@@ -230,9 +214,7 @@ public sealed class PhotinoXAPI : IDisposable
             sessions = _sessions.Values.ToList();
             _sessions.Clear();
         }
-
-        foreach (var session in sessions)
-            session.Dispose();
+        foreach (var session in sessions) session.Dispose();
     }
 
     private sealed class PhotinoXObserver : IAgentObserver
@@ -254,49 +236,42 @@ public sealed class PhotinoXAPI : IDisposable
                 new JsonObject { ["current"] = n, ["max"] = m });
             return Task.CompletedTask;
         }
-
         public Task OnThought(string text)
         {
             _api.Send(_requestId, MessageTypes.AgentThought, _sessionId,
                 new JsonObject { ["text"] = text });
             return Task.CompletedTask;
         }
-
         public Task OnToolCall(string name, string args)
         {
             _api.Send(_requestId, MessageTypes.AgentToolStart, _sessionId,
                 new JsonObject { ["tool"] = name, ["arguments"] = args });
             return Task.CompletedTask;
         }
-
         public Task OnToolResult(string result, bool isError)
         {
             _api.Send(_requestId, MessageTypes.AgentToolResult, _sessionId,
                 new JsonObject { ["success"] = !isError, ["result"] = result });
             return Task.CompletedTask;
         }
-
         public Task OnDone(string message)
         {
             _api.Send(_requestId, MessageTypes.AgentDone, _sessionId,
                 new JsonObject { ["message"] = message });
             return Task.CompletedTask;
         }
-
         public Task OnError(string message)
         {
             _api.Send(_requestId, MessageTypes.AgentError, _sessionId,
                 new JsonObject { ["message"] = message });
             return Task.CompletedTask;
         }
-
         public Task OnWarning(string message)
         {
             _api.Send(_requestId, MessageTypes.AgentWarning, _sessionId,
                 new JsonObject { ["message"] = message });
             return Task.CompletedTask;
         }
-
         public Task OnDanger(string message)
         {
             _api.Send(_requestId, MessageTypes.AgentDanger, _sessionId,
