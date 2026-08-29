@@ -13,7 +13,9 @@ public sealed record AgentArguments(
     bool IsDryRun,
     bool ShowHelp,
     bool ShowVersion,
-    bool ShowDoc);
+    bool ShowDoc,
+    int MaxRetries = 3,
+    int RetryDelayMs = 1000);
 
 /// <summary>
 /// Pure argument parsing — no side effects, no console output.
@@ -33,8 +35,10 @@ public static class ArgumentParser
         var mcpUrl = GetValue(args, "--mcp", "--mcp-url")
                      ?? Environment.GetEnvironmentVariable("CSAGENT_MCP_URL");
         var port = GetPort(args);
+        var maxRetries = GetInt(args, "--max-retries", RetryPolicy.Default.MaxAttempts);
+        var retryDelayMs = GetInt(args, "--retry-delay", RetryPolicy.Default.BaseDelayMs);
 
-        return new AgentArguments(memFile, modelOverride, mcpUrl, port, isUiMode, isNativeMode, isDryRun, showHelp, showVersion, showDoc);
+        return new AgentArguments(memFile, modelOverride, mcpUrl, port, isUiMode, isNativeMode, isDryRun, showHelp, showVersion, showDoc, maxRetries, retryDelayMs);
     }
 
     private static string GetMemoryFile(string[] args)
@@ -44,7 +48,7 @@ public static class ArgumentParser
 
         for (int i = 0; i < args.Length; i++)
         {
-            if (args[i] is "--model" or "--mcp" or "--mcp-url" or "--port" or "-p")
+            if (args[i] is "--model" or "--mcp" or "--mcp-url" or "--port" or "-p" or "--max-retries" or "--retry-delay")
             {
                 i++;
                 continue;
@@ -76,5 +80,17 @@ public static class ArgumentParser
                     return p;
             }
         return 5050;
+    }
+
+    /// <summary>
+    /// Reads an integer-valued option, falling back to <paramref name="defaultValue"/>
+    /// when the flag is absent or its value is not a positive integer.
+    /// </summary>
+    private static int GetInt(string[] args, string name, int defaultValue)
+    {
+        for (int i = 0; i < args.Length - 1; i++)
+            if (args[i] == name && int.TryParse(args[i + 1], out var v) && v > 0)
+                return v;
+        return defaultValue;
     }
 }

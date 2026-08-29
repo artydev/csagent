@@ -23,7 +23,7 @@ public sealed class CodingAgent : IDisposable
     {
         _opts = opts;
         _observer = observer;
-        _client = new LlmClient(apiKey, endpoint, model);
+        _client = new LlmClient(apiKey, endpoint, model, opts.Retry);
 
         if (!string.IsNullOrWhiteSpace(mcpUrl))
             _mcp = new McpClient(mcpUrl);

@@ -20,7 +20,7 @@ public static class WebHost
         app.MapGet("/app.js", () => Results.Content(StaticAssets.JsUI, "application/javascript"));
         app.MapGet("/styles.css", () => Results.Content(StaticAssets.CssUI, "text/css"));
 
-        app.MapEndpoints(args.MemoryFile, args.ModelOverride, args.McpUrl);
+        app.MapEndpoints(args.MemoryFile, args.ModelOverride, args.McpUrl, new RetryPolicy(args.MaxRetries, args.RetryDelayMs));
 
         var url = $"http://localhost:{args.Port}";
 

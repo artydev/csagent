@@ -156,6 +156,8 @@ MCP tool definitions are converted to OpenAI-style function definitions and offe
 | `--mcp`, `--mcp-url <url>` | Connect to an MCP server at the given endpoint |
 | `--port`, `-p <n>` | Web UI port number (default: `5050`) |
 | `--dry-run` | Simulate tool execution without making changes |
+| `--max-retries <n>` | Max attempts for HTTP 429 (rate limit) retries (default: `3`) |
+| `--retry-delay <ms>` | Base backoff delay in ms before the first retry (default: `1000`) |
 | `--help`, `-h`, `/?` | Display help and exit |
 | `--version` | Display the current version of CSAgent and exit |
 | `--doc` | Display this documentation in a nicely formatted terminal view and exit |
@@ -190,6 +192,9 @@ csagent --ui --model deepseek-v4-flash
 
 # Connect to an MCP server
 csagent --ui --mcp https://example.com/mcp
+
+# Tune rate-limit retry behavior
+csagent --max-retries 5 --retry-delay 2000
 ```
 
 ---
@@ -357,7 +362,11 @@ Ensure the `ALBERT_API_KEY` environment variable is set before running.
 Your API key is invalid or expired. Check your credentials.
 
 ### "API 429: ..."
-You've hit the rate limit. Wait a moment and try again.
+You've hit the rate limit. CSAgent now retries automatically with exponential
+backoff (honoring the server's `Retry-After` header when present). If the error
+persists after all retries, the API is still rate-limiting you — wait a moment
+and try again. You can tune the retry behavior with `--max-retries` and
+`--retry-delay` (see [Command-Line Arguments](#command-line-arguments)).
 
 ### "command timed out (60s)"
 The shell command took longer than 60 seconds. Try breaking the task into smaller steps.

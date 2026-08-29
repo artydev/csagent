@@ -3,4 +3,5 @@ namespace CsAgentUI;
 public sealed record AgentOptions(
     int MaxSteps = 30,
     bool DryRun = false,
-    bool Confirm = true);
+    bool Confirm = true,
+    RetryPolicy? Retry = null);

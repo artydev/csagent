@@ -66,6 +66,10 @@ public static class HelpDisplay
         Console.WriteLine($"                       (default: {LlmSettings.Model})");
         Console.WriteLine("    --port, -p <n>    Web UI port number (default: 5050)");
         Console.WriteLine("    --dry-run         Simulate tool execution without making changes");
+        Console.WriteLine("    --max-retries <n> Max attempts for 429 rate-limit retries");
+        Console.WriteLine($"                       (default: {RetryPolicy.Default.MaxAttempts})");
+        Console.WriteLine("    --retry-delay <ms> Base backoff delay in ms for 429 retries");
+        Console.WriteLine($"                       (default: {RetryPolicy.Default.BaseDelayMs})");
         Console.WriteLine();
 
         C("green");
@@ -87,6 +91,7 @@ public static class HelpDisplay
         Console.WriteLine("    csagent --mem my_history.json                 CLI with custom memory file");
         Console.WriteLine("    csagent --ui --mem my_history.json            Web UI with custom memory file");
         Console.WriteLine("    csagent --dry-run                             Dry-run mode (no changes)");
+        Console.WriteLine("    csagent --max-retries 5 --retry-delay 2000    Tune 429 retry/backoff");
         Console.WriteLine("    csagent --doc                                 Show documentation");
         Console.WriteLine("    csagent --version                             Show version");
         Console.WriteLine("    csagent --help                                Show this help");

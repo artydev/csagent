@@ -36,7 +36,7 @@ public static class TuiHost
             apiKey,
             LlmSettings.Endpoint,
             model,
-            new AgentOptions(Confirm: true, DryRun: args.IsDryRun),
+            new AgentOptions(Confirm: true, DryRun: args.IsDryRun, Retry: new RetryPolicy(args.MaxRetries, args.RetryDelayMs)),
             new ConsoleObserver(),
             args.McpUrl);
 
