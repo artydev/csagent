@@ -94,6 +94,7 @@ public static class MessageTypes
     public const string ChatStart = "chat.start";
     public const string ChatAccepted = "chat.accepted";
     public const string ChatCancel = "chat.cancel";
+    public const string ChatCancelAccepted = "chat.cancel.accepted";
     public const string ApprovalRespond = "approval.respond";
 
     public const string InfoResult = "info.result";
