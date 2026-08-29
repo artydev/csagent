@@ -8,16 +8,11 @@ function normaliseLanguageClass(className) {
 function parseMarkdown(text) {
     const container = document.createElement("div");
     container.className = "markdown-content";
-    const html = marked.parse(text);
-    container.innerHTML = html;
-
+    container.innerHTML = marked.parse(text);
     container.querySelectorAll('code[class*="language-"], pre[class*="language-"]').forEach((element) => {
         element.className = normaliseLanguageClass(element.className);
     });
-
-    if (typeof Prism !== "undefined")
-        Prism.highlightAllUnder(container);
-
+    if (typeof Prism !== "undefined") Prism.highlightAllUnder(container);
     return container;
 }
 
@@ -55,7 +50,6 @@ function appendThought(text) {
 function appendToolStart(payload) {
     const div = document.createElement("div");
     div.className = "call";
-
     const header = document.createElement("div");
     header.className = "call-header";
     const labels = {
@@ -70,7 +64,6 @@ function appendToolStart(payload) {
     strong.textContent = labels[payload.tool] || `🔧 ${payload.tool}`;
     header.appendChild(strong);
     div.appendChild(header);
-
     const args = document.createElement("pre");
     args.className = "call-raw";
     args.textContent = payload.arguments || "{}";
@@ -81,12 +74,10 @@ function appendToolStart(payload) {
 function appendToolResult(payload) {
     const div = document.createElement("div");
     div.className = payload.success ? "result" : "danger";
-
     const header = document.createElement("div");
     header.className = "result-header";
     header.textContent = payload.success ? "✓ Result" : "✗ Error";
     div.appendChild(header);
-
     const pre = document.createElement("pre");
     pre.className = "result-content";
     pre.textContent = payload.result || "";
@@ -116,6 +107,11 @@ function handleBridgeMessage(message) {
         }
         case "session.created":
             window.currentSessionId = payload.sessionId || message.sessionId;
+            if (window.pendingPrompt) {
+                const prompt = window.pendingPrompt;
+                window.pendingPrompt = null;
+                CSAgentBridge.chat(window.currentSessionId, prompt);
+            }
             break;
         case "agent.step":
             updateStep(payload);
@@ -150,8 +146,7 @@ function handleBridgeMessage(message) {
             appendElement(textMessage("warning", "⚠ Approval required: ", payload.description || "The agent requested approval."));
             break;
         case "session.closed":
-            if (window.currentSessionId === message.sessionId)
-                window.currentSessionId = null;
+            if (window.currentSessionId === message.sessionId) window.currentSessionId = null;
             resetStep();
             break;
     }
@@ -162,16 +157,15 @@ function run() {
     const prompt = input.value.trim();
     if (!prompt) return;
 
+    input.value = "";
+    appendUserMessage(prompt);
+
     if (!window.currentSessionId) {
         window.pendingPrompt = prompt;
         CSAgentBridge.createSession();
-        input.value = "";
-        appendUserMessage(prompt);
         return;
     }
 
-    input.value = "";
-    appendUserMessage(prompt);
     CSAgentBridge.chat(window.currentSessionId, prompt);
 }
 
@@ -180,14 +174,3 @@ window.addEventListener("DOMContentLoaded", () => {
     CSAgentBridge.info();
     CSAgentBridge.createSession();
 });
-
-// session.created is asynchronous; queue the first prompt until it arrives.
-const originalHandler = handleBridgeMessage;
-window.handleBridgeMessage = function (message) {
-    originalHandler(message);
-    if (message.type === "session.created" && window.pendingPrompt) {
-        const prompt = window.pendingPrompt;
-        window.pendingPrompt = null;
-        CSAgentBridge.chat(window.currentSessionId, prompt);
-    }
-};
