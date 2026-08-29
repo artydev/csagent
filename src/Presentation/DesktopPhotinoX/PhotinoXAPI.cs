@@ -1,22 +1,16 @@
 extern alias PhotinoX;
 
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using CsAgentUI.Shared;
+using CsAgentUI.Presentation.DesktopPhotinoX.Protocol;
 using PhotinoWindow = PhotinoX::Photino.NET.PhotinoWindow;
 
 namespace CsAgentUI.Presentation.DesktopPhotinoX;
 
 /// <summary>
-/// PhotinoX bridge — exposes .NET functionality to the JavaScript UI running inside
-/// the PhotinoX window, and allows .NET to push events back to the UI.
-///
-/// PhotinoX does not expose arbitrary host objects like WebView2. Instead it uses a
-/// message-passing model:
-///   - JS → .NET:  window.external.sendMessage(jsonString) triggers HandleMessage.
-///   - .NET → JS:  window.SendWebMessage(jsonString) invokes window.external.receiveMessage.
-///
-/// The bridge therefore implements a small JSON message protocol (see 3.1).
+/// Thin JSON transport between the Photino WebView and the desktop agent.
+/// The bridge owns protocol validation and session lifecycle; CodingAgent owns
+/// agent execution and tool semantics.
 /// </summary>
 public sealed class PhotinoXAPI : IDisposable
 {
@@ -24,8 +18,8 @@ public sealed class PhotinoXAPI : IDisposable
     private readonly AgentArguments _args;
     private readonly string _apiKey;
     private readonly object _gate = new();
-    private CodingAgent? _agent;
-    private CancellationTokenSource? _cts;
+    private readonly Dictionary<string, AgentSession> _sessions = new(StringComparer.Ordinal);
+    private bool _disposed;
 
     public PhotinoXAPI(PhotinoWindow window, AgentArguments args)
     {
@@ -34,256 +28,286 @@ public sealed class PhotinoXAPI : IDisposable
         _apiKey = Environment.GetEnvironmentVariable("ALBERT_API_KEY") ?? "";
     }
 
-    // ── Info exposed to JS (mirrors DesktopAPI) ──────────────────────────────
-
-    public string? MachineName => Environment.MachineName;
-    public string UserName => Environment.UserName;
-    public string? ExePath => Environment.ProcessPath?.Substring(0, Math.Min(Environment.ProcessPath.Length, 100));
-
-    // ── Message handling (JS → .NET) ─────────────────────────────────────────
-
-    /// <summary>
-    /// Entry point for messages arriving from JS via window.external.sendMessage.
-    /// </summary>
-    public void HandleMessage(string message)
+    public void HandleMessage(string raw)
     {
-        JsonNode? node;
+        if (_disposed) return;
+
+        if (!BridgeProtocol.TryParse(raw, out var message, out var error))
+        {
+            Send(Guid.NewGuid().ToString("N"), MessageTypes.BridgeError, null,
+                new JsonObject { ["message"] = error });
+            return;
+        }
+
         try
         {
-            node = JsonNode.Parse(message);
-        }
-        catch (JsonException)
-        {
-            SendError(null, "Invalid JSON message.");
-            return;
-        }
-
-        if (node is not JsonObject obj)
-        {
-            SendError(null, "Message must be a JSON object.");
-            return;
-        }
-
-        var id = obj["id"]?.GetValue<int?>();
-        var type = obj["type"]?.GetValue<string>() ?? "";
-
-        switch (type)
-        {
-            case "getInfo":
-                SendInfo(id);
-                break;
-            case "chat":
-                var prompt = obj["prompt"]?.GetValue<string>() ?? "";
-                _ = Task.Run(() => RunChatAsync(id, prompt));
-                break;
-            case "cancel":
-                CancelChat();
-                break;
-            default:
-                SendError(id, $"Unknown message type: '{type}'.");
-                break;
-        }
-    }
-
-    // ── Agent loop (chat) ────────────────────────────────────────────────────
-
-    private async Task RunChatAsync(int? id, string prompt)
-    {
-        if (string.IsNullOrWhiteSpace(_apiKey))
-        {
-            SendError(id, "ALBERT_API_KEY env var not set.");
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(prompt))
-        {
-            SendError(id, "Empty prompt.");
-            return;
-        }
-
-        lock (_gate)
-        {
-            if (_agent is not null)
+            switch (message!.Type)
             {
-                SendError(id, "A chat is already running.");
-                return;
+                case MessageTypes.InfoGet:
+                    SendInfo(message.Id);
+                    break;
+                case MessageTypes.SessionCreate:
+                    CreateSession(message);
+                    break;
+                case MessageTypes.SessionClose:
+                    CloseSession(message);
+                    break;
+                case MessageTypes.ChatStart:
+                    StartChat(message);
+                    break;
+                case MessageTypes.ChatCancel:
+                    CancelChat(message);
+                    break;
+                case MessageTypes.ApprovalRespond:
+                    Send(message.Id, MessageTypes.BridgeError, message.SessionId,
+                        new JsonObject { ["message"] = "Interactive approval is not yet exposed by the agent core." });
+                    break;
+                default:
+                    Send(message.Id, MessageTypes.BridgeError, message.SessionId,
+                        new JsonObject { ["message"] = $"Unknown message type: '{message.Type}'." });
+                    break;
             }
-            _cts = new CancellationTokenSource();
-            _agent = new CodingAgent(
-                _apiKey,
-                LlmSettings.Endpoint,
-                _args.ModelOverride ?? LlmSettings.Model,
-                new AgentOptions(MaxSteps: 30, DryRun: _args.IsDryRun, Confirm: true),
-                new PhotinoXObserver(this),
-                _args.McpUrl);
-        }
-
-        try
-        {
-            var messages = await MemoryStore.LoadAsync(_args.MemoryFile);
-            if (messages.Count == 0)
-                messages.Add(CodingAgent.SystemMessage(OperatingSystem.IsWindows()));
-
-            messages.Add(JsonHelpers.Message("user", prompt));
-
-            await _agent.RunAsync(messages, _args.MemoryFile);
-        }
-        catch (OperationCanceledException)
-        {
-            SendEvent("done", new JsonObject { ["message"] = JsonValue.Create("Chat cancelled.") });
         }
         catch (Exception ex)
         {
-            SendEvent("danger", new JsonObject { ["message"] = JsonValue.Create(ex.Message) });
-        }
-        finally
-        {
-            lock (_gate)
-            {
-                _agent?.Dispose();
-                _agent = null;
-                _cts?.Dispose();
-                _cts = null;
-            }
+            Send(message.Id, MessageTypes.BridgeError, message.SessionId,
+                new JsonObject { ["message"] = ex.Message });
         }
     }
 
-    private void CancelChat()
+    private void CreateSession(BridgeMessage message)
     {
+        var sessionId = string.IsNullOrWhiteSpace(message.SessionId)
+            ? Guid.NewGuid().ToString("N")
+            : message.SessionId!;
+
         lock (_gate)
         {
-            _cts?.Cancel();
+            if (_sessions.ContainsKey(sessionId))
+            {
+                Send(message.Id, MessageTypes.BridgeError, sessionId,
+                    new JsonObject { ["message"] = "Session already exists." });
+                return;
+            }
+
+            var observer = new PhotinoXObserver(this, message.Id, sessionId);
+            _sessions[sessionId] = new AgentSession(sessionId, _args, _apiKey, observer);
+        }
+
+        Send(message.Id, MessageTypes.SessionCreated, sessionId,
+            new JsonObject { ["sessionId"] = sessionId });
+    }
+
+    private void CloseSession(BridgeMessage message)
+    {
+        if (string.IsNullOrWhiteSpace(message.SessionId))
+        {
+            Send(message.Id, MessageTypes.BridgeError, null,
+                new JsonObject { ["message"] = "sessionId is required." });
+            return;
+        }
+
+        AgentSession? session;
+        lock (_gate)
+        {
+            if (!_sessions.Remove(message.SessionId, out session))
+            {
+                Send(message.Id, MessageTypes.BridgeError, message.SessionId,
+                    new JsonObject { ["message"] = "Session not found." });
+                return;
+            }
+        }
+
+        session.Dispose();
+        Send(message.Id, MessageTypes.SessionClosed, message.SessionId, null);
+    }
+
+    private void StartChat(BridgeMessage message)
+    {
+        if (string.IsNullOrWhiteSpace(message.SessionId))
+        {
+            Send(message.Id, MessageTypes.BridgeError, null,
+                new JsonObject { ["message"] = "sessionId is required." });
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_apiKey))
+        {
+            Send(message.Id, MessageTypes.AgentError, message.SessionId,
+                new JsonObject { ["message"] = "ALBERT_API_KEY env var not set." });
+            return;
+        }
+
+        var prompt = message.Payload?["prompt"]?.GetValue<string>() ?? "";
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            Send(message.Id, MessageTypes.AgentError, message.SessionId,
+                new JsonObject { ["message"] = "Empty prompt." });
+            return;
+        }
+
+        AgentSession session;
+        lock (_gate)
+        {
+            if (!_sessions.TryGetValue(message.SessionId, out session!))
+            {
+                Send(message.Id, MessageTypes.BridgeError, message.SessionId,
+                    new JsonObject { ["message"] = "Session not found." });
+                return;
+            }
+        }
+
+        Send(message.Id, MessageTypes.ChatAccepted, message.SessionId, null);
+        _ = RunChatAsync(session, message.Id, prompt);
+    }
+
+    private async Task RunChatAsync(AgentSession session, string requestId, string prompt)
+    {
+        try
+        {
+            await session.RunAsync(prompt);
+        }
+        catch (OperationCanceledException)
+        {
+            Send(requestId, MessageTypes.AgentCancelled, session.Id,
+                new JsonObject { ["reason"] = "cancelled" });
+        }
+        catch (Exception ex)
+        {
+            Send(requestId, MessageTypes.AgentError, session.Id,
+                new JsonObject { ["message"] = ex.Message });
         }
     }
 
-    // ── Outbound messages (.NET → JS) ────────────────────────────────────────
-
-    private void SendInfo(int? id)
+    private void CancelChat(BridgeMessage message)
     {
-        var data = new JsonObject
+        if (string.IsNullOrWhiteSpace(message.SessionId))
         {
-            ["machineName"] = JsonValue.Create(MachineName),
-            ["userName"] = JsonValue.Create(UserName),
-            ["exePath"] = JsonValue.Create(ExePath),
-        };
-        Send(new JsonObject
+            Send(message.Id, MessageTypes.BridgeError, null,
+                new JsonObject { ["message"] = "sessionId is required." });
+            return;
+        }
+
+        lock (_gate)
         {
-            ["id"] = id is null ? null : JsonValue.Create(id.Value),
-            ["type"] = JsonValue.Create("info"),
-            ["data"] = data,
+            if (!_sessions.TryGetValue(message.SessionId, out var session))
+            {
+                Send(message.Id, MessageTypes.BridgeError, message.SessionId,
+                    new JsonObject { ["message"] = "Session not found." });
+                return;
+            }
+            session.Cancel();
+        }
+
+        Send(message.Id, MessageTypes.AgentCancelled, message.SessionId,
+            new JsonObject { ["reason"] = "user" });
+    }
+
+    private void SendInfo(string requestId)
+    {
+        Send(requestId, MessageTypes.InfoResult, null, new JsonObject
+        {
+            ["userName"] = Environment.UserName,
+            ["machineName"] = Environment.MachineName
         });
     }
 
-    private void SendError(int? id, string message)
+    internal void Send(string requestId, string type, string? sessionId, JsonNode? payload)
     {
-        Send(new JsonObject
-        {
-            ["id"] = id is null ? null : JsonValue.Create(id.Value),
-            ["type"] = JsonValue.Create("error"),
-            ["data"] = JsonValue.Create(message),
-        });
-    }
-
-    private void SendEvent(string eventName, JsonObject? data)
-    {
-        Send(new JsonObject
-        {
-            ["type"] = JsonValue.Create("event"),
-            ["event"] = JsonValue.Create(eventName),
-            ["data"] = data,
-        });
-    }
-
-    private void Send(JsonObject message)
-    {
+        if (_disposed) return;
+        var message = BridgeProtocol.Create(requestId, type, sessionId, payload);
         _window.SendWebMessage(message.ToJsonString());
     }
 
     public void Dispose()
     {
+        List<AgentSession> sessions;
         lock (_gate)
         {
-            _cts?.Cancel();
-            _agent?.Dispose();
-            _agent = null;
-            _cts?.Dispose();
-            _cts = null;
+            if (_disposed) return;
+            _disposed = true;
+            sessions = _sessions.Values.ToList();
+            _sessions.Clear();
         }
-    }
 
-    // ── Observer that forwards agent events to JS ────────────────────────────
+        foreach (var session in sessions)
+            session.Dispose();
+    }
 
     private sealed class PhotinoXObserver : IAgentObserver
     {
         private readonly PhotinoXAPI _api;
+        private readonly string _requestId;
+        private readonly string _sessionId;
 
-        public PhotinoXObserver(PhotinoXAPI api) => _api = api;
+        public PhotinoXObserver(PhotinoXAPI api, string requestId, string sessionId)
+        {
+            _api = api;
+            _requestId = requestId;
+            _sessionId = sessionId;
+        }
 
         public Task OnStep(int n, int m)
         {
-            _api.SendEvent("step", new JsonObject
-            {
-                ["n"] = JsonValue.Create(n),
-                ["m"] = JsonValue.Create(m),
-            });
+            _api.Send(_requestId, MessageTypes.AgentStep, _sessionId,
+                new JsonObject { ["current"] = n, ["max"] = m });
             return Task.CompletedTask;
         }
 
         public Task OnThought(string text)
         {
-            _api.SendEvent("message", new JsonObject
-            {
-                ["type"] = JsonValue.Create("thought"),
-                ["data"] = JsonValue.Create(text),
-            });
+            _api.Send(_requestId, MessageTypes.AgentThought, _sessionId,
+                new JsonObject { ["text"] = text });
             return Task.CompletedTask;
         }
 
         public Task OnToolCall(string name, string args)
         {
-            _api.SendEvent("call", new JsonObject
-            {
-                ["name"] = JsonValue.Create(name),
-                ["args"] = JsonValue.Create(JsonHelpers.PrettyJson(args)),
-            });
+            _api.Send(_requestId, MessageTypes.AgentToolStart, _sessionId,
+                new JsonObject
+                {
+                    ["tool"] = name,
+                    ["arguments"] = args
+                });
             return Task.CompletedTask;
         }
 
         public Task OnToolResult(string result, bool isError)
         {
-            _api.SendEvent("result", new JsonObject
-            {
-                ["result"] = JsonValue.Create(result),
-                ["isError"] = JsonValue.Create(isError),
-            });
+            _api.Send(_requestId, MessageTypes.AgentToolResult, _sessionId,
+                new JsonObject
+                {
+                    ["success"] = !isError,
+                    ["result"] = result
+                });
             return Task.CompletedTask;
         }
 
         public Task OnDone(string message)
         {
-            _api.SendEvent("done", new JsonObject { ["message"] = JsonValue.Create(message) });
+            _api.Send(_requestId, MessageTypes.AgentDone, _sessionId,
+                new JsonObject { ["message"] = message });
             return Task.CompletedTask;
         }
 
         public Task OnError(string message)
         {
-            _api.SendEvent("danger", new JsonObject { ["message"] = JsonValue.Create(message) });
+            _api.Send(_requestId, MessageTypes.AgentError, _sessionId,
+                new JsonObject { ["message"] = message });
             return Task.CompletedTask;
         }
 
         public Task OnWarning(string message)
         {
-            _api.SendEvent("message", new JsonObject
-            {
-                ["type"] = JsonValue.Create("warning"),
-                ["data"] = JsonValue.Create(message),
-            });
+            _api.Send(_requestId, MessageTypes.AgentWarning, _sessionId,
+                new JsonObject { ["message"] = message });
             return Task.CompletedTask;
         }
 
         public Task OnDanger(string message)
         {
-            _api.SendEvent("danger", new JsonObject { ["message"] = JsonValue.Create(message) });
+            _api.Send(_requestId, MessageTypes.AgentDanger, _sessionId,
+                new JsonObject { ["message"] = message });
             return Task.CompletedTask;
         }
     }
