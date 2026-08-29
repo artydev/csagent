@@ -6,29 +6,23 @@ namespace CsAgentUI.Presentation.DesktopPhotinoX;
 public sealed class AgentSession : IDisposable
 {
     private readonly object _gate = new();
-    private readonly CancellationTokenSource _cancellation = new();
     private CodingAgent? _agent;
     private bool _disposed;
 
-    public AgentSession(string id, AgentArguments args, string apiKey, IAgentObserver observer)
+    public AgentSession(string id, AgentArguments args, string apiKey)
     {
         Id = id;
         Args = args;
-        _agent = new CodingAgent(
-            apiKey,
-            LlmSettings.Endpoint,
-            args.ModelOverride ?? LlmSettings.Model,
-            new AgentOptions(MaxSteps: 30, DryRun: args.IsDryRun, Confirm: true),
-            observer,
-            args.McpUrl);
+        _agent = null;
+        ApiKey = apiKey;
     }
 
+    private string ApiKey { get; }
     public string Id { get; }
     public AgentArguments Args { get; }
-
     public bool IsRunning { get; private set; }
 
-    public async Task RunAsync(string prompt)
+    public async Task RunAsync(string prompt, IAgentObserver observer)
     {
         CodingAgent agent;
         lock (_gate)
@@ -36,8 +30,16 @@ public sealed class AgentSession : IDisposable
             ObjectDisposedException.ThrowIf(_disposed, this);
             if (IsRunning)
                 throw new InvalidOperationException("A chat is already running in this session.");
+
             IsRunning = true;
-            agent = _agent ?? throw new ObjectDisposedException(nameof(AgentSession));
+            _agent ??= new CodingAgent(
+                ApiKey,
+                LlmSettings.Endpoint,
+                Args.ModelOverride ?? LlmSettings.Model,
+                new AgentOptions(MaxSteps: 30, DryRun: Args.IsDryRun, Confirm: true),
+                observer,
+                Args.McpUrl);
+            agent = _agent;
         }
 
         try
@@ -61,7 +63,6 @@ public sealed class AgentSession : IDisposable
         lock (_gate)
         {
             if (_disposed) return;
-            _cancellation.Cancel();
             _agent?.Cancel();
         }
     }
@@ -72,10 +73,8 @@ public sealed class AgentSession : IDisposable
         {
             if (_disposed) return;
             _disposed = true;
-            _cancellation.Cancel();
             _agent?.Dispose();
             _agent = null;
-            _cancellation.Dispose();
         }
     }
 }
