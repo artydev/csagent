@@ -6,6 +6,7 @@ namespace CsAgentUI.Presentation.DesktopPhotinoX;
 public sealed class AgentSession : IDisposable
 {
     private readonly object _gate = new();
+    private readonly string _apiKey;
     private CodingAgent? _agent;
     private bool _disposed;
 
@@ -13,11 +14,9 @@ public sealed class AgentSession : IDisposable
     {
         Id = id;
         Args = args;
-        _agent = null;
-        ApiKey = apiKey;
+        _apiKey = apiKey;
     }
 
-    private string ApiKey { get; }
     public string Id { get; }
     public AgentArguments Args { get; }
     public bool IsRunning { get; private set; }
@@ -32,14 +31,14 @@ public sealed class AgentSession : IDisposable
                 throw new InvalidOperationException("A chat is already running in this session.");
 
             IsRunning = true;
-            _agent ??= new CodingAgent(
-                ApiKey,
+            agent = new CodingAgent(
+                _apiKey,
                 LlmSettings.Endpoint,
                 Args.ModelOverride ?? LlmSettings.Model,
                 new AgentOptions(MaxSteps: 30, DryRun: Args.IsDryRun, Confirm: true),
                 observer,
                 Args.McpUrl);
-            agent = _agent;
+            _agent = agent;
         }
 
         try
@@ -54,7 +53,12 @@ public sealed class AgentSession : IDisposable
         finally
         {
             lock (_gate)
+            {
+                if (ReferenceEquals(_agent, agent))
+                    _agent = null;
                 IsRunning = false;
+            }
+            agent.Dispose();
         }
     }
 
@@ -73,6 +77,7 @@ public sealed class AgentSession : IDisposable
         {
             if (_disposed) return;
             _disposed = true;
+            _agent?.Cancel();
             _agent?.Dispose();
             _agent = null;
         }
