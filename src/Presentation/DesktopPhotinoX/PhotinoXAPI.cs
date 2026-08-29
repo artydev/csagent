@@ -7,11 +7,6 @@ using PhotinoWindow = PhotinoX::Photino.NET.PhotinoWindow;
 
 namespace CsAgentUI.Presentation.DesktopPhotinoX;
 
-/// <summary>
-/// Thin JSON transport between the Photino WebView and the desktop agent.
-/// The bridge owns protocol validation and session lifecycle; CodingAgent owns
-/// agent execution and tool semantics.
-/// </summary>
 public sealed class PhotinoXAPI : IDisposable
 {
     private readonly PhotinoWindow _window;
@@ -90,8 +85,7 @@ public sealed class PhotinoXAPI : IDisposable
                 return;
             }
 
-            var observer = new PhotinoXObserver(this, message.Id, sessionId);
-            _sessions[sessionId] = new AgentSession(sessionId, _args, _apiKey, observer);
+            _sessions[sessionId] = new AgentSession(sessionId, _args, _apiKey);
         }
 
         Send(message.Id, MessageTypes.SessionCreated, sessionId,
@@ -155,6 +149,12 @@ public sealed class PhotinoXAPI : IDisposable
                     new JsonObject { ["message"] = "Session not found." });
                 return;
             }
+            if (session.IsRunning)
+            {
+                Send(message.Id, MessageTypes.BridgeError, message.SessionId,
+                    new JsonObject { ["message"] = "A chat is already running in this session." });
+                return;
+            }
         }
 
         Send(message.Id, MessageTypes.ChatAccepted, message.SessionId, null);
@@ -163,9 +163,10 @@ public sealed class PhotinoXAPI : IDisposable
 
     private async Task RunChatAsync(AgentSession session, string requestId, string prompt)
     {
+        var observer = new PhotinoXObserver(this, requestId, session.Id);
         try
         {
-            await session.RunAsync(prompt);
+            await session.RunAsync(prompt, observer);
         }
         catch (OperationCanceledException)
         {
@@ -188,17 +189,18 @@ public sealed class PhotinoXAPI : IDisposable
             return;
         }
 
+        AgentSession? session;
         lock (_gate)
+            _sessions.TryGetValue(message.SessionId, out session);
+
+        if (session is null)
         {
-            if (!_sessions.TryGetValue(message.SessionId, out var session))
-            {
-                Send(message.Id, MessageTypes.BridgeError, message.SessionId,
-                    new JsonObject { ["message"] = "Session not found." });
-                return;
-            }
-            session.Cancel();
+            Send(message.Id, MessageTypes.BridgeError, message.SessionId,
+                new JsonObject { ["message"] = "Session not found." });
+            return;
         }
 
+        session.Cancel();
         Send(message.Id, MessageTypes.AgentCancelled, message.SessionId,
             new JsonObject { ["reason"] = "user" });
     }
@@ -215,8 +217,7 @@ public sealed class PhotinoXAPI : IDisposable
     internal void Send(string requestId, string type, string? sessionId, JsonNode? payload)
     {
         if (_disposed) return;
-        var message = BridgeProtocol.Create(requestId, type, sessionId, payload);
-        _window.SendWebMessage(message.ToJsonString());
+        _window.SendWebMessage(BridgeProtocol.Create(requestId, type, sessionId, payload).ToJsonString());
     }
 
     public void Dispose()
@@ -264,22 +265,14 @@ public sealed class PhotinoXAPI : IDisposable
         public Task OnToolCall(string name, string args)
         {
             _api.Send(_requestId, MessageTypes.AgentToolStart, _sessionId,
-                new JsonObject
-                {
-                    ["tool"] = name,
-                    ["arguments"] = args
-                });
+                new JsonObject { ["tool"] = name, ["arguments"] = args });
             return Task.CompletedTask;
         }
 
         public Task OnToolResult(string result, bool isError)
         {
             _api.Send(_requestId, MessageTypes.AgentToolResult, _sessionId,
-                new JsonObject
-                {
-                    ["success"] = !isError,
-                    ["result"] = result
-                });
+                new JsonObject { ["success"] = !isError, ["result"] = result });
             return Task.CompletedTask;
         }
 
