@@ -1,4 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
@@ -21,21 +20,17 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <DebugType>full</DebugType>
   </PropertyGroup>
-
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <DebugType>full</DebugType>
   </PropertyGroup>
-
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <DebugType>full</DebugType>
   </PropertyGroup>
-
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <DebugType>full</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Standalone tool projects and build output must not be compiled into the app. -->
     <Compile Remove="tools/**/*.cs" />
     <Compile Remove="obj/**/*.cs" />
     <Compile Remove="bin/**/*.cs" />
@@ -44,13 +39,13 @@
     <None Remove="tools/**" />
   </ItemGroup>
 
-
   <ItemGroup>
     <EmbeddedResource Include="src\Presentation\Web\assets\index.html" />
     <EmbeddedResource Include="src\Presentation\Web\assets\app.js" />
     <EmbeddedResource Include="src\Presentation\Web\assets\styles.css" />
     <EmbeddedResource Include="src\Presentation\DesktopPhotinoX\assets\index.html" />
     <EmbeddedResource Include="src\Presentation\DesktopPhotinoX\assets\app.js" />
+    <EmbeddedResource Include="src\Presentation\DesktopPhotinoX\assets\bridge.js" />
     <EmbeddedResource Include="src\Presentation\DesktopPhotinoX\assets\styles.css" />
   </ItemGroup>
 
@@ -59,12 +54,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- PhotinoX (maintained fork of Photino.NET) — vendored local project
-         reference (vendor/PhotinoX). Provides the PhotinoApplication hosting
-         model used by the desktop mode. The PhotinoX API (5.x) is not published
-         to NuGet, so we vendor its source for portability. The PhotinoX code
-         references its types via an extern alias (PhotinoX) to keep the
-         namespace isolated. -->
     <ProjectReference Include="vendor\PhotinoX\PhotinoX.csproj" Aliases="PhotinoX" />
   </ItemGroup>
 
