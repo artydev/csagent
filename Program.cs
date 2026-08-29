@@ -1,4 +1,3 @@
-using CsAgentUI.Presentation.DesktopPhotinoX;
 using CsAgentUI.Presentation.Tui;
 using CsAgentUI.Presentation.Web;
 using CsAgentUI.Shared;
@@ -7,7 +6,7 @@ namespace CsAgentUI;
 
 public static class Program
 {
-    public const string Version = "0.3.0";
+    public const string Version = "0.5";
 
     [STAThread]
     public static int Main(string[] args)
@@ -32,13 +31,7 @@ public static class Program
             return 0;
         }
 
-        if (parsed.IsDesktopXMode)
-        {
-            // Desktop window mode - PhotinoX native window (cross-platform)
-            PhotinoXHost.Run(parsed);
-            return 0;
-        }
-        else if (parsed.IsUiMode)
+        if (parsed.IsUiMode)
         {
             // Web UI mode - ASP.NET server with SSE
             WebHost.Run(parsed);

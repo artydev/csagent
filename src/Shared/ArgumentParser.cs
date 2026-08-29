@@ -10,7 +10,6 @@ public sealed record AgentArguments(
     int Port,
     bool IsUiMode,
     bool IsNativeMode,
-    bool IsDesktopXMode,
     bool IsDryRun,
     bool ShowHelp,
     bool ShowVersion,
@@ -25,7 +24,6 @@ public static class ArgumentParser
     {
         var isUiMode = args.Contains("--ui");
         var isNativeMode = args.Contains("--native");
-        var isDesktopXMode = args.Contains("--desktop");
         var isDryRun = args.Contains("--dry-run");
         var showHelp = args.Contains("--help") || args.Contains("-h") || args.Contains("/?");
         var showVersion = args.Contains("--version");
@@ -36,7 +34,7 @@ public static class ArgumentParser
                      ?? Environment.GetEnvironmentVariable("CSAGENT_MCP_URL");
         var port = GetPort(args);
 
-        return new AgentArguments(memFile, modelOverride, mcpUrl, port, isUiMode, isNativeMode, isDesktopXMode, isDryRun, showHelp, showVersion, showDoc);
+        return new AgentArguments(memFile, modelOverride, mcpUrl, port, isUiMode, isNativeMode, isDryRun, showHelp, showVersion, showDoc);
     }
 
     private static string GetMemoryFile(string[] args)
@@ -52,7 +50,7 @@ public static class ArgumentParser
                 continue;
             }
 
-            if (args[i] != "--ui" && args[i] != "--native" && args[i] != "--desktop" && args[i] != "--dry-run" && !args[i].StartsWith("-"))
+            if (args[i] != "--ui" && args[i] != "--native" && args[i] != "--dry-run" && !args[i].StartsWith("-"))
                 return args[i];
         }
 
