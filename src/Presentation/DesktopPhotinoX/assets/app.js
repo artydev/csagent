@@ -9,9 +9,6 @@ function parseMarkdown(text) {
     const container = document.createElement("div");
     container.className = "markdown-content";
 
-    // The desktop shell may be offline or the CDN scripts may be blocked.
-    // Never let Markdown rendering prevent an otherwise valid LLM response
-    // from appearing in the conversation.
     if (typeof marked === "undefined" || typeof marked.parse !== "function") {
         container.textContent = text;
         return container;
@@ -122,14 +119,22 @@ function handleBridgeMessage(message) {
                 if (label && payload.userName) label.textContent = payload.userName;
                 break;
             }
-            case "session.created":
-                window.currentSessionId = payload.sessionId || message.sessionId;
-                if (window.pendingPrompt) {
+            case "session.created": {
+                // Session creation can be delivered more than once during WebView
+                // initialization. Keep the first session and never overwrite an
+                // active session with a second unsolicited session.
+                if (!window.currentSessionId) {
+                    window.currentSessionId = payload.sessionId || message.sessionId;
+                }
+
+                if (window.pendingPrompt && window.currentSessionId === (payload.sessionId || message.sessionId)) {
                     const prompt = window.pendingPrompt;
                     window.pendingPrompt = null;
+                    console.log("[CSAgent] Sending pending prompt", prompt);
                     CSAgentBridge.chat(window.currentSessionId, prompt);
                 }
                 break;
+            }
             case "chat.accepted":
                 updateStep({ current: 0, max: 30 });
                 break;
@@ -159,7 +164,7 @@ function handleBridgeMessage(message) {
                 resetStep();
                 break;
             case "agent.cancelled":
-                appendElement(textMessage("warning", "⚠ ", "Chat cancelled."));
+                appendElement(textMessage("warning", "⚠ ", payload.reason === "user" ? "Chat cancelled." : "Chat cancelled."));
                 resetStep();
                 break;
             case "session.closed":
@@ -175,6 +180,8 @@ function handleBridgeMessage(message) {
 
 function run() {
     const input = document.getElementById("in");
+    if (!input) return;
+
     const prompt = input.value.trim();
     if (!prompt) return;
 
@@ -184,23 +191,53 @@ function run() {
     try {
         if (!window.currentSessionId) {
             window.pendingPrompt = prompt;
-            CSAgentBridge.createSession();
+            console.log("[CSAgent] Creating session for prompt");
+            if (!window.sessionCreateInFlight) {
+                window.sessionCreateInFlight = true;
+                CSAgentBridge.createSession();
+            }
             return;
         }
 
+        console.log("[CSAgent] Sending chat", window.currentSessionId);
         CSAgentBridge.chat(window.currentSessionId, prompt);
     } catch (error) {
         appendElement(textMessage("danger", "✗ ", error?.message || String(error)));
     }
 }
 
+// Make Enter handling independent of the deprecated keypress event used by
+// some embedded WebViews.
+function initialiseInput() {
+    const input = document.getElementById("in");
+    if (!input || input.dataset.csagentBound === "1") return;
+    input.dataset.csagentBound = "1";
+    input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            run();
+        }
+    });
+}
+
 window.addEventListener("DOMContentLoaded", () => {
+    if (window.csAgentInitialised) return;
+    window.csAgentInitialised = true;
+
     try {
+        initialiseInput();
         CSAgentBridge.onMessage(handleBridgeMessage);
         CSAgentBridge.info();
-        CSAgentBridge.createSession();
+
+        if (!window.currentSessionId && !window.sessionCreateInFlight) {
+            window.sessionCreateInFlight = true;
+            CSAgentBridge.createSession();
+        }
     } catch (error) {
         console.error("PhotinoX initialization failed", error);
         appendElement(textMessage("danger", "✗ ", error?.message || String(error)));
     }
 });
+
+// Keep the inline onkeypress in index.html backwards compatible.
+window.run = run;
