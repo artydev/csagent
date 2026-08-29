@@ -19,11 +19,20 @@
 | 3 | [Wire retry policy through CodingAgent](task-03-wire-config.md) | ✅ | Pass retry options from `AgentOptions`/CLI into `LlmClient` |
 | 4 | [Add CLI flags & help text](task-04-cli-flags.md) | ✅ | `--max-retries`, `--retry-delay` args + help/docs |
 | 5 | [Update README troubleshooting](task-05-readme.md) | ✅ | Document new retry behavior |
-| 6 | [Build & verify](task-06-build-verify.md) | ⬜ | `dotnet build`, manual smoke test |
+| 6 | [Build & verify](task-06-build-verify.md) | ✅ | `dotnet build`, manual smoke test |
 
 ---
 
 ## Progress Log
+
+### 2025-XX-XX — Task 6 complete (all tasks done)
+- `dotnet build -c Release` → 0 errors (warnings all pre-existing).
+- CLI smoke test: `--version` and `--help` (new flags present).
+- Retry-path harness against a local stub:
+  - 429 + `Retry-After: 1` → retried, succeeded on attempt 2 (~1s delay honored).
+  - 400 → failed fast (1 attempt).
+  - persistent 429 → threw after `MaxAttempts=3`.
+- Throwaway harness removed; workspace clean.
 
 ### 2025-XX-XX — Task 5 complete
 - Updated `README.md`:
@@ -44,9 +53,9 @@
 
 ## Definition of Done (overall)
 
-- [ ] 429 responses are retried automatically with exponential backoff.
-- [ ] `Retry-After` header is honored when present.
-- [ ] Retry behavior is configurable (max attempts, base delay).
-- [ ] Non-retryable errors (4xx other than 429, 5xx beyond retries) still surface cleanly.
-- [ ] CLI flags documented in help and README.
-- [ ] `dotnet build` succeeds; manual smoke test confirms retry path.
+- [x] 429 responses are retried automatically with exponential backoff.
+- [x] `Retry-After` header is honored when present.
+- [x] Retry behavior is configurable (max attempts, base delay).
+- [x] Non-retryable errors (4xx other than 429, 5xx beyond retries) still surface cleanly.
+- [x] CLI flags documented in help and README.
+- [x] `dotnet build` succeeds; manual smoke test confirms retry path.

@@ -1,6 +1,6 @@
 # Task 6 — Build & Verify
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 **Depends on:** Tasks 1–5
 **Unblocks:** overall completion
 
@@ -54,13 +54,51 @@ Also test the exhaustion path: a stub that always returns 429 should cause
 
 ## Acceptance Criteria
 
-- [ ] `dotnet build` succeeds with zero errors.
-- [ ] Retry path verified against a stub (429 → 200 succeeds).
-- [ ] Exhaustion path verified (always-429 throws after `MaxAttempts`).
-- [ ] No throwaway files left behind.
+- [x] `dotnet build` succeeds with zero errors.
+- [x] Retry path verified against a stub (429 → 200 succeeds).
+- [x] Exhaustion path verified (always-429 throws after `MaxAttempts`).
+- [x] No throwaway files left behind.
 
 ## Definition of Done
 
-- [ ] Build green.
-- [ ] Retry and exhaustion paths demonstrated with actual output.
-- [ ] Workspace clean.
+- [x] Build green.
+- [x] Retry and exhaustion paths demonstrated with actual output.
+- [x] Workspace clean.
+
+---
+
+## Verification Log
+
+### Build
+- `dotnet build -c Release` → **0 errors**, 20 warnings (all pre-existing
+  trimming/AOT `IL2026`/`IL3050` and nullability `CS8602`/`CS8604` warnings in
+  files untouched by this feature; none in the new retry code).
+- Output: `bin\Release\net10.0\CsAgentUI.dll`.
+
+### CLI smoke test
+- `dotnet run -- --version` → `CSAgent version 0.5`.
+- `dotnet run -- --help` → new flags present:
+  - `--max-retries <n>`
+  - `--retry-delay <ms>`
+  - example `csagent --max-retries 5 --retry-delay 2000`
+
+### Retry-path smoke test (throwaway harness, since removed)
+Ran a local `HttpListener` stub against `LlmClient.CompleteChatAsync`:
+
+```
+PASS  Scenario 1: succeeds after retry  attempts=2, elapsed=1057ms, content=ok
+PASS  Scenario 2: 400 fails fast        attempts=1, msg=API 400: {...}
+PASS  Scenario 3: 429 exhausts retries  attempts=3, msg=API 429: {...}
+
+ALL TESTS PASSED
+```
+
+- Scenario 1: first call returned 429 with `Retry-After: 1`; the ~1s delay
+  confirms the header was honored (not the 50ms base delay). Second call
+  returned 200 → parsed JSON returned.
+- Scenario 2: 400 threw immediately after 1 attempt (no retry).
+- Scenario 3: persistent 429 threw after exactly `MaxAttempts=3` attempts.
+
+### Cleanup
+- Throwaway harness (`C:\temp\csagent\.smoketest\`) fully removed.
+- `git status --short` clean; no leftover artifacts.
