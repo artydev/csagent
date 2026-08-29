@@ -4,12 +4,12 @@ namespace CsAgentUI;
 /// Describes how transient API failures (HTTP 429) are retried.
 /// </summary>
 public sealed record RetryPolicy(
-    int MaxAttempts = 3,          // total attempts including the first
+    int MaxAttempts = 6,          // total attempts including the first
     int BaseDelayMs = 1000,       // initial backoff delay
     double BackoffFactor = 2.0,   // multiplier applied after each retry
-    int MaxDelayMs = 30000)      // cap on the backoff delay
+    int MaxDelayMs = 70000)      // cap on the backoff delay
 {
-    /// <summary>The default retry policy (3 attempts, 1s base delay, 2x backoff, 30s cap).</summary>
+    /// <summary>The default retry policy (6 attempts, 1s base delay, 2x backoff, 70s cap).</summary>
     public static RetryPolicy Default { get; } = new();
 
     /// <summary>

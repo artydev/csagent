@@ -14,7 +14,7 @@ public sealed record AgentArguments(
     bool ShowHelp,
     bool ShowVersion,
     bool ShowDoc,
-    int MaxRetries = 3,
+    int MaxRetries = 6,
     int RetryDelayMs = 1000);
 
 /// <summary>
