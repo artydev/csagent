@@ -39,11 +39,11 @@
     <Compile Remove="tools/**/*.cs" />
     <Compile Remove="obj/**/*.cs" />
     <Compile Remove="bin/**/*.cs" />
+    <!-- Vendored PhotinoX source is compiled by its own project (see ProjectReference below). -->
     <Compile Remove="vendor/**/*.cs" />
     <EmbeddedResource Remove="tools/**" />
     <None Remove="tools/**" />
   </ItemGroup>
-
 
   <ItemGroup>
     <EmbeddedResource Include="src\Presentation\Web\assets\index.html" />
@@ -66,10 +66,6 @@
          references its types via an extern alias (PhotinoX) to keep the
          namespace isolated. -->
     <ProjectReference Include="vendor\PhotinoX\PhotinoX.csproj" Aliases="PhotinoX" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="download\" />
   </ItemGroup>
 
 </Project>
