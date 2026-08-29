@@ -39,19 +39,21 @@
     <Compile Remove="tools/**/*.cs" />
     <Compile Remove="obj/**/*.cs" />
     <Compile Remove="bin/**/*.cs" />
-    <!-- Vendored PhotinoX source is compiled by its own project (see ProjectReference below). -->
-    <Compile Remove="vendor/**/*.cs" />
     <EmbeddedResource Remove="tools/**" />
     <None Remove="tools/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="README.md">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="src\Presentation\Web\assets\index.html" />
     <EmbeddedResource Include="src\Presentation\Web\assets\app.js" />
     <EmbeddedResource Include="src\Presentation\Web\assets\styles.css" />
-    <EmbeddedResource Include="src\Presentation\DesktopPhotinoX\assets\index.html" />
-    <EmbeddedResource Include="src\Presentation\DesktopPhotinoX\assets\app.js" />
-    <EmbeddedResource Include="src\Presentation\DesktopPhotinoX\assets\styles.css" />
   </ItemGroup>
 
   <ItemGroup>
@@ -59,13 +61,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- PhotinoX (maintained fork of Photino.NET) — vendored local project
-         reference (vendor/PhotinoX). Provides the PhotinoApplication hosting
-         model used by the desktop mode. The PhotinoX API (5.x) is not published
-         to NuGet, so we vendor its source for portability. The PhotinoX code
-         references its types via an extern alias (PhotinoX) to keep the
-         namespace isolated. -->
-    <ProjectReference Include="vendor\PhotinoX\PhotinoX.csproj" Aliases="PhotinoX" />
+    <Folder Include="wwwroot\documentation\" />
   </ItemGroup>
 
 </Project>
