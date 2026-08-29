@@ -3,21 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data:; connect-src 'none';">
     <title>CSAgent DesktopX</title>
-
-    <!-- Local styles served via the custom app:// scheme -->
     <link href="app://styles.css" rel="stylesheet" />
 
-    <!-- Prism.js Dracula Theme -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dracula.min.css" rel="stylesheet" />
-
-    <!-- Marked.js v12.0.1 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
-
-    <!-- Prism.js Core -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-
-    <!-- Prism Language Components (loaded synchronously so they are instantly available) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
@@ -49,9 +41,7 @@
                     <span class="version" id="version-label">DesktopX</span>
                 </h2>
             </div>
-            <div>
-                <h4>CSAgent DesktopX</h4>
-            </div>
+            <div><h4>CSAgent DesktopX</h4></div>
             <div class="status">
                 <span class="status-dot"></span>
                 <span id="step-counter">Ready</span>
@@ -59,14 +49,10 @@
         </header>
         <div id="log"></div>
         <div class="input-area">
-            <input id="in"
-                   autocomplete="off"
+            <input id="in" autocomplete="off"
                    placeholder="Ask CSAgent anything... (All destructive actions require approval)"
                    onkeypress="if(event.key==='Enter'){run();}">
         </div>
     </div>
-
-    <!-- Local app logic served via the custom app:// scheme -->
-    <script src="app://app.js"></script>
 </body>
 </html>
