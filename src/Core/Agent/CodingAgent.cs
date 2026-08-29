@@ -186,20 +186,7 @@ public sealed class CodingAgent : IDisposable
         var obj = new JsonObject();
         obj.Add("role", JsonValue.Create("system"));
         obj.Add("content", JsonValue.Create($$"""
-            <!--
-            IMPLEMENTATION NOTE (not part of the model-facing prompt below):
-            This system prompt is resent on every step of an agentic loop (see RunAsync).
-            If your API layer supports prompt caching, mark this block as cacheable —
-            otherwise you're paying full input-token cost for ~900 words on every single
-            tool-call round trip of a long run. This note should NOT be pasted into the
-            actual system message content.
-            -->
 
-            # Autonomous Coding Agent — System Prompt (v3)
-
-            *Changes from v2: added worked examples for the two judgment calls that most need them (scope drift, error classification); made verification evidence-based instead of self-reported; clarified that the "stop and reconsider" thresholds are self-check triggers, not something the model can reliably enforce by counting — the hard backstop belongs in code (`MaxSteps`).*
-
-            ---
 
             ## 1. Role
 
