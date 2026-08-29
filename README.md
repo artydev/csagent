@@ -2,7 +2,7 @@
 
 **CSAgent** is a cross-platform autonomous coding agent that runs on Windows, Linux, and macOS. It uses an OpenAI-compatible API (e.g., [Albert API](https://albert.api.etalab.gouv.fr)) to understand natural-language instructions and autonomously perform coding tasks by reading, writing, and listing files, as well as executing shell commands.
 
-It ships with three presentation modes — a terminal UI (TUI), a web UI, and a native window — and can optionally connect to external **MCP (Model Context Protocol)** servers to extend its toolset.
+It ships with two presentation modes — a terminal UI (TUI) and a web UI — and can optionally connect to external **MCP (Model Context Protocol)** servers to extend its toolset.
 
 ---
 
@@ -12,7 +12,6 @@ It ships with three presentation modes — a terminal UI (TUI), a web UI, and a 
 - [Modes of Operation](#modes-of-operation)
   - [CLI Mode (Default)](#cli-mode-default)
   - [Web UI Mode](#web-ui-mode)
-  - [Native Window Mode](#native-window-mode)
 - [LLM Models](#llm-models)
 - [MCP Integration](#mcp-integration)
 - [Environment Variables](#environment-variables)
@@ -83,14 +82,6 @@ In Web UI mode (`--ui` flag), CSAgent starts a local web server with a modern, d
 
 The web UI is served at **http://localhost:5050** by default. Use `--port <n>` (or `-p <n>`) to change the port.
 
-### Native Window Mode
-
-In Native window mode (`--native` flag), CSAgent opens a dedicated desktop window (AOTrino WebView2) instead of a terminal or browser tab. This mode is **Windows-only**.
-
-```bash
-csagent --native
-```
-
 ---
 
 ## LLM Models
@@ -112,9 +103,6 @@ csagent --model gpt-4o
 
 # Web UI mode with a different model
 csagent --ui --model deepseek-v4-flash
-
-# Native window mode with a different model
-csagent --native --model gpt-4o
 ```
 
 ---
@@ -163,7 +151,6 @@ MCP tool definitions are converted to OpenAI-style function definitions and offe
 | Argument | Description |
 |---|---|
 | `--ui` | Start in Web UI mode (starts a web server) |
-| `--native` | Start in Native window mode (AOTrino WebView2, Windows only) |
 | `--mem <file>` | Specify a custom memory/conversation file (default: `agent_memory.json`) |
 | `--model <model>` | Override the default LLM model for the current mode |
 | `--mcp`, `--mcp-url <url>` | Connect to an MCP server at the given endpoint |
@@ -342,10 +329,6 @@ csagent
 # Web UI mode
 set ALBERT_API_KEY=your-key
 csagent --ui
-
-# Native window mode (Windows)
-set ALBERT_API_KEY=your-key
-csagent --native
 ```
 
 ---

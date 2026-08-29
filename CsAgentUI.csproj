@@ -39,8 +39,12 @@
     <Compile Remove="tools/**/*.cs" />
     <Compile Remove="obj/**/*.cs" />
     <Compile Remove="bin/**/*.cs" />
+    <Compile Remove="wwwroot\**" />
+    <Content Remove="wwwroot\**" />
     <EmbeddedResource Remove="tools/**" />
+    <EmbeddedResource Remove="wwwroot\**" />
     <None Remove="tools/**" />
+    <None Remove="wwwroot\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -58,10 +62,6 @@
 
   <ItemGroup>
     <PackageReference Include="ModelContextProtocol" Version="1.0.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="wwwroot\documentation\" />
   </ItemGroup>
 
 </Project>
