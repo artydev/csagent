@@ -39,59 +39,11 @@
     <Compile Remove="tools/**/*.cs" />
     <Compile Remove="obj/**/*.cs" />
     <Compile Remove="bin/**/*.cs" />
+    <!-- Vendored PhotinoX source is compiled by its own project (see ProjectReference below). -->
     <Compile Remove="vendor/**/*.cs" />
     <EmbeddedResource Remove="tools/**" />
     <None Remove="tools/**" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Compile Include="vendor\PhotinoX\Extensions.cs" />
-    <Compile Include="vendor\PhotinoX\GlobalSuppressions.cs" />
-    <Compile Include="vendor\PhotinoX\NativeDelegates.cs" />
-    <Compile Include="vendor\PhotinoX\NativeMethods.Application.cs" />
-    <Compile Include="vendor\PhotinoX\NativeMethods.Browser.cs" />
-    <Compile Include="vendor\PhotinoX\NativeMethods.Callbacks.cs" />
-    <Compile Include="vendor\PhotinoX\NativeMethods.cs" />
-    <Compile Include="vendor\PhotinoX\NativeMethods.Dialogs.cs" />
-    <Compile Include="vendor\PhotinoX\NativeMethods.Memory.cs" />
-    <Compile Include="vendor\PhotinoX\NativeMethods.Notifications.cs" />
-    <Compile Include="vendor\PhotinoX\NativeMethods.Window.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoApplication.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoApplication.Enums.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoApplication.EventArgs.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoApplication.Events.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoApplication.Extensions.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoApplication.Fluent.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoApplication.Fluent.Handlers.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoApplication.Helpers.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoApplication.NativeParameters.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoApplication.Notifications.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoApplication.RuntimeInfo.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoBootstrap.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoDialogEnums.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoDispatcher.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoDispatcher.States.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoDispatcher.Stats.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoMonitorStruct.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoWindow.Browser.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoWindow.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoWindow.CustomSchemes.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoWindow.Dialogs.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoWindow.Enums.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoWindow.EventArgs.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoWindow.Events.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoWindow.Extensions.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoWindow.Fluent.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoWindow.Fluent.Handlers.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoWindow.Helpers.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoWindow.NativeParameters.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoWindow.States.cs" />
-    <Compile Include="vendor\PhotinoX\PhotinoWindowCollection.cs" />
-    <Compile Include="vendor\PhotinoX\Platform.cs" />
-    <Compile Include="vendor\PhotinoX\Platform.Linux.cs" />
-    <Compile Include="vendor\PhotinoX\Platform.MacOS.cs" />
-  </ItemGroup>
-
 
   <ItemGroup>
     <EmbeddedResource Include="src\Presentation\Web\assets\index.html" />
@@ -100,11 +52,6 @@
     <EmbeddedResource Include="src\Presentation\DesktopPhotinoX\assets\index.html" />
     <EmbeddedResource Include="src\Presentation\DesktopPhotinoX\assets\app.js" />
     <EmbeddedResource Include="src\Presentation\DesktopPhotinoX\assets\styles.css" />
-  </ItemGroup>
-
-
-  <ItemGroup>
-    <None Include="vendor\PhotinoX\PhotinoX.csproj" />
   </ItemGroup>
 
   <ItemGroup>
