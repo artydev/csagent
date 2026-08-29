@@ -92,42 +92,42 @@ public static class UI
     public static void Success(string msg)
     {
         Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine($"\n[OK] {msg}");
+        Console.WriteLine($"\n✓ {msg}");
         Console.ResetColor();
     }
 
     public static void Error(string msg)
     {
         Console.ForegroundColor = ConsoleColor.Red;
-        Console.Error.WriteLine($"\n[ERR] {msg}");
+        Console.Error.WriteLine($"\n✗ {msg}");
         Console.ResetColor();
     }
 
     public static void Warning(string msg)
     {
         Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine($"\n[WARN] {msg}");
+        Console.WriteLine($"\n⚠ {msg}");
         Console.ResetColor();
     }
 
     public static void Danger(string msg)
     {
         Console.ForegroundColor = ConsoleColor.Red;
-        Console.Error.WriteLine($"\n[DANGER] {msg}");
+        Console.Error.WriteLine($"\n☠ {msg}");
         Console.ResetColor();
     }
 
     public static void Info(string msg)
     {
         Console.ForegroundColor = ConsoleColor.DarkCyan;
-        Console.WriteLine($"[i] {msg}");
+        Console.WriteLine($"ℹ {msg}");
         Console.ResetColor();
     }
 
     public static bool Confirm(string question)
     {
         Console.ForegroundColor = ConsoleColor.DarkYellow;
-        Console.Write($"[?] {question} [Y/n] ");
+        Console.Write($"? {question} [Y/n] ");
         Console.ResetColor();
         var answer = Console.ReadLine()?.Trim().ToUpperInvariant();
         return answer is null or "" or "Y";

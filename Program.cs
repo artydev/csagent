@@ -1,3 +1,4 @@
+using System.Text;
 using CsAgentUI.Presentation.Tui;
 using CsAgentUI.Presentation.Web;
 using CsAgentUI.Shared;
@@ -11,6 +12,19 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // Ensure the console can render Unicode visual characters (✓, ⚠, →, box
+        // drawing, etc.). On Windows the default legacy code page (CP437/CP850)
+        // cannot display these; UTF-8 is required. Safe no-op on Unix terminals.
+        try
+        {
+            Console.OutputEncoding = Encoding.UTF8;
+        }
+        catch
+        {
+            // Some hosts (e.g. redirected output) may reject this; fall back to
+            // the default encoding rather than crashing.
+        }
+
         var parsed = ArgumentParser.Parse(args);
 
         if (parsed.ShowHelp)
