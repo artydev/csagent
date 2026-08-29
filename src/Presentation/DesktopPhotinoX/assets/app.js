@@ -8,11 +8,27 @@ function normaliseLanguageClass(className) {
 function parseMarkdown(text) {
     const container = document.createElement("div");
     container.className = "markdown-content";
-    container.innerHTML = marked.parse(text);
-    container.querySelectorAll('code[class*="language-"], pre[class*="language-"]').forEach((element) => {
-        element.className = normaliseLanguageClass(element.className);
-    });
-    if (typeof Prism !== "undefined") Prism.highlightAllUnder(container);
+
+    // The desktop shell may be offline or the CDN scripts may be blocked.
+    // Never let Markdown rendering prevent an otherwise valid LLM response
+    // from appearing in the conversation.
+    if (typeof marked === "undefined" || typeof marked.parse !== "function") {
+        container.textContent = text;
+        return container;
+    }
+
+    try {
+        container.innerHTML = marked.parse(text);
+        container.querySelectorAll('code[class*="language-"], pre[class*="language-"]').forEach((element) => {
+            element.className = normaliseLanguageClass(element.className);
+        });
+        if (typeof Prism !== "undefined" && typeof Prism.highlightAllUnder === "function")
+            Prism.highlightAllUnder(container);
+    } catch (error) {
+        console.warn("Markdown rendering failed; displaying plain text.", error);
+        container.textContent = text;
+    }
+
     return container;
 }
 
@@ -99,56 +115,61 @@ function resetStep() {
 function handleBridgeMessage(message) {
     const payload = message.payload || {};
 
-    switch (message.type) {
-        case "info.result": {
-            const label = document.getElementById("version-label");
-            if (label && payload.userName) label.textContent = payload.userName;
-            break;
-        }
-        case "session.created":
-            window.currentSessionId = payload.sessionId || message.sessionId;
-            if (window.pendingPrompt) {
-                const prompt = window.pendingPrompt;
-                window.pendingPrompt = null;
-                CSAgentBridge.chat(window.currentSessionId, prompt);
+    try {
+        switch (message.type) {
+            case "info.result": {
+                const label = document.getElementById("version-label");
+                if (label && payload.userName) label.textContent = payload.userName;
+                break;
             }
-            break;
-        case "agent.step":
-            updateStep(payload);
-            break;
-        case "agent.thought":
-            appendThought(payload.text || "");
-            break;
-        case "agent.tool.start":
-            appendToolStart(payload);
-            break;
-        case "agent.tool.result":
-            appendToolResult(payload);
-            break;
-        case "agent.warning":
-            appendElement(textMessage("warning", "⚠ ", payload.message || ""));
-            break;
-        case "agent.danger":
-        case "agent.error":
-        case "bridge.error":
-            appendElement(textMessage("danger", "✗ ", payload.message || ""));
-            resetStep();
-            break;
-        case "agent.done":
-            appendElement(textMessage("done", "✓ ", payload.message || "Task completed successfully"));
-            resetStep();
-            break;
-        case "agent.cancelled":
-            appendElement(textMessage("warning", "⚠ ", "Chat cancelled."));
-            resetStep();
-            break;
-        case "agent.approval.required":
-            appendElement(textMessage("warning", "⚠ Approval required: ", payload.description || "The agent requested approval."));
-            break;
-        case "session.closed":
-            if (window.currentSessionId === message.sessionId) window.currentSessionId = null;
-            resetStep();
-            break;
+            case "session.created":
+                window.currentSessionId = payload.sessionId || message.sessionId;
+                if (window.pendingPrompt) {
+                    const prompt = window.pendingPrompt;
+                    window.pendingPrompt = null;
+                    CSAgentBridge.chat(window.currentSessionId, prompt);
+                }
+                break;
+            case "chat.accepted":
+                updateStep({ current: 0, max: 30 });
+                break;
+            case "agent.step":
+                updateStep(payload);
+                break;
+            case "agent.thought":
+                appendThought(payload.text || "");
+                break;
+            case "agent.tool.start":
+                appendToolStart(payload);
+                break;
+            case "agent.tool.result":
+                appendToolResult(payload);
+                break;
+            case "agent.warning":
+                appendElement(textMessage("warning", "⚠ ", payload.message || ""));
+                break;
+            case "agent.danger":
+            case "agent.error":
+            case "bridge.error":
+                appendElement(textMessage("danger", "✗ ", payload.message || "Unknown error"));
+                resetStep();
+                break;
+            case "agent.done":
+                appendElement(textMessage("done", "✓ ", payload.message || "Task completed successfully"));
+                resetStep();
+                break;
+            case "agent.cancelled":
+                appendElement(textMessage("warning", "⚠ ", "Chat cancelled."));
+                resetStep();
+                break;
+            case "session.closed":
+                if (window.currentSessionId === message.sessionId) window.currentSessionId = null;
+                resetStep();
+                break;
+        }
+    } catch (error) {
+        console.error("Failed to render bridge message", message, error);
+        appendElement(textMessage("danger", "✗ UI error: ", error?.message || String(error)));
     }
 }
 
@@ -160,17 +181,26 @@ function run() {
     input.value = "";
     appendUserMessage(prompt);
 
-    if (!window.currentSessionId) {
-        window.pendingPrompt = prompt;
-        CSAgentBridge.createSession();
-        return;
-    }
+    try {
+        if (!window.currentSessionId) {
+            window.pendingPrompt = prompt;
+            CSAgentBridge.createSession();
+            return;
+        }
 
-    CSAgentBridge.chat(window.currentSessionId, prompt);
+        CSAgentBridge.chat(window.currentSessionId, prompt);
+    } catch (error) {
+        appendElement(textMessage("danger", "✗ ", error?.message || String(error)));
+    }
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-    CSAgentBridge.onMessage(handleBridgeMessage);
-    CSAgentBridge.info();
-    CSAgentBridge.createSession();
+    try {
+        CSAgentBridge.onMessage(handleBridgeMessage);
+        CSAgentBridge.info();
+        CSAgentBridge.createSession();
+    } catch (error) {
+        console.error("PhotinoX initialization failed", error);
+        appendElement(textMessage("danger", "✗ ", error?.message || String(error)));
+    }
 });
