@@ -387,7 +387,7 @@ Navigate manually to **http://localhost:5050** in your browser (or the port you 
 
 ## License
 
-This project is provided as-is. It is built on the .NET base class library with a single NuGet dependency (`ModelContextProtocol`) used for MCP integration.
+This project is provided as-is. It is built entirely on the .NET base class library with zero NuGet dependencies — including the MCP client, which uses only `HttpClient` and `System.Text.Json`.
 
 ---
 

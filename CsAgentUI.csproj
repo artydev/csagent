@@ -60,8 +60,4 @@
     <EmbeddedResource Include="src\Presentation\Web\assets\styles.css" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="ModelContextProtocol" Version="1.0.0" />
-  </ItemGroup>
-
 </Project>
