@@ -112,6 +112,7 @@ csagent --ui --model deepseek-v4-flash
 The following capabilities are planned for future releases:
 
 - **MCP (Model Context Protocol) integration** — connect to external MCP servers over Streamable HTTP to expose additional tools to the agent.
+- **Python scripting** — drive CSAgent from Python scripts: launch sessions, send prompts, and retrieve responses and agent events (steps, tool calls, results) programmatically, for example via a csagent module or a web-interface (SSE) client.
 
 ---
 
