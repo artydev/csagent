@@ -2,7 +2,7 @@
 
 **CSAgent** is a cross-platform autonomous coding agent that runs on Windows, Linux, and macOS. It uses an OpenAI-compatible API (e.g., [Albert API](https://albert.api.etalab.gouv.fr)) to understand natural-language instructions and autonomously perform coding tasks by reading, writing, and listing files, as well as executing shell commands.
 
-It ships with two presentation modes — a terminal UI (TUI) and a web UI — and can optionally connect to external **MCP (Model Context Protocol)** servers to extend its toolset.
+It ships with two presentation modes — a terminal UI (TUI) and a web UI.
 
 ---
 
@@ -13,7 +13,7 @@ It ships with two presentation modes — a terminal UI (TUI) and a web UI — an
   - [CLI Mode (Default)](#cli-mode-default)
   - [Web UI Mode](#web-ui-mode)
 - [LLM Models](#llm-models)
-- [MCP Integration](#mcp-integration)
+- [Future Features](#future-features)
 - [Environment Variables](#environment-variables)
 - [Command-Line Arguments](#command-line-arguments)
 - [Safety Features](#safety-features)
@@ -107,33 +107,11 @@ csagent --ui --model deepseek-v4-flash
 
 ---
 
-## MCP Integration
+## Future Features
 
-CSAgent can connect to external **Model Context Protocol (MCP)** servers over Streamable HTTP. MCP tools discovered on the server are exposed to the LLM alongside the built-in tools, letting you extend the agent's capabilities without changing its code.
+The following capabilities are planned for future releases:
 
-### Connecting to an MCP server
-
-Pass the endpoint URL via the `--mcp` (or `--mcp-url`) argument, or set the `CSAGENT_MCP_URL` environment variable:
-
-```bash
-# Via command line
-csagent --ui --mcp https://example.com/mcp
-
-# Via environment variable
-set CSAGENT_MCP_URL=https://example.com/mcp
-csagent --ui
-```
-
-### Supported MCP operations
-
-The built-in MCP client supports the core Streamable HTTP flow:
-
-- `initialize` — protocol negotiation (protocol version `2025-06-18`)
-- `notifications/initialized` — session handshake
-- `tools/list` — discover available tools
-- `tools/call` — invoke a tool with JSON arguments
-
-MCP tool definitions are converted to OpenAI-style function definitions and offered to the LLM alongside the built-in tools. When the agent calls an MCP tool, the request is forwarded to the server and the text result is returned.
+- **MCP (Model Context Protocol) integration** — connect to external MCP servers over Streamable HTTP to expose additional tools to the agent.
 
 ---
 
@@ -142,7 +120,6 @@ MCP tool definitions are converted to OpenAI-style function definitions and offe
 | Variable | Required | Description |
 |---|---|---|
 | `ALBERT_API_KEY` | Yes | Your API key for the OpenAI-compatible endpoint |
-| `CSAGENT_MCP_URL` | No | Default MCP server endpoint (overridden by `--mcp`/`--mcp-url`) |
 
 ---
 
@@ -153,7 +130,6 @@ MCP tool definitions are converted to OpenAI-style function definitions and offe
 | `--ui` | Start in Web UI mode (starts a web server) |
 | `--mem <file>` | Specify a custom memory/conversation file (default: `agent_memory.json`) |
 | `--model <model>` | Override the default LLM model for the current mode |
-| `--mcp`, `--mcp-url <url>` | Connect to an MCP server at the given endpoint |
 | `--port`, `-p <n>` | Web UI port number (default: `5050`) |
 | `--dry-run` | Simulate tool execution without making changes |
 | `--max-retries <n>` | Max attempts for HTTP 429 (rate limit) retries (default: `3`) |
@@ -189,9 +165,6 @@ csagent --model gpt-4o-mini
 
 # Override the LLM model in Web UI mode
 csagent --ui --model deepseek-v4-flash
-
-# Connect to an MCP server
-csagent --ui --mcp https://example.com/mcp
 
 # Tune rate-limit retry behavior
 csagent --max-retries 5 --retry-delay 2000
@@ -268,7 +241,7 @@ Error: file too large (1024 KB). Use sh to grep/head.
 
 ## Available Tools
 
-The agent has access to four built-in tools, plus any tools exposed by a connected MCP server:
+The agent has access to four built-in tools:
 
 ### `write_file`
 Write (or overwrite) a text file. Parent directories are created automatically.
@@ -295,9 +268,6 @@ Execute a shell command. Uses `cmd.exe` on Windows, `/bin/sh` elsewhere.
 
 **Parameters:**
 - `cmd` (string, required) — Shell command to run
-
-### MCP tools
-When connected to an MCP server, its `tools/list` results are exposed to the LLM as additional callable tools. Invocations are forwarded to the server via `tools/call`.
 
 ---
 
@@ -377,9 +347,6 @@ The file exceeds the 500 KB read limit. Use `sh` with tools like `grep`, `head`,
 ### "Path is not allowed"
 File operations are restricted to the current working directory. Change to the target directory before running the agent, or use shell commands to copy files into the workspace.
 
-### "MCP server returned no tools list"
-The MCP server did not respond to `tools/list`. Verify the endpoint URL is correct and reachable, and that it implements the Streamable HTTP transport.
-
 ### Browser doesn't open automatically
 Navigate manually to **http://localhost:5050** in your browser (or the port you chose with `--port`).
 
@@ -387,7 +354,7 @@ Navigate manually to **http://localhost:5050** in your browser (or the port you 
 
 ## License
 
-This project is provided as-is. It is built entirely on the .NET base class library with zero NuGet dependencies — including the MCP client, which uses only `HttpClient` and `System.Text.Json`.
+This project is provided as-is. It is built entirely on the .NET base class library with zero NuGet dependencies.
 
 ---
 
