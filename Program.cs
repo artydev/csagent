@@ -1,4 +1,5 @@
 using System.Text;
+using CsAgentUI.Presentation.LeanUI;
 using CsAgentUI.Presentation.Tui;
 using CsAgentUI.Presentation.Web;
 using CsAgentUI.Shared;
@@ -45,7 +46,12 @@ public static class Program
             return 0;
         }
 
-        if (parsed.IsUiMode)
+        if (parsed.IsLeanUiMode)
+        {
+            // Lean UI mode - lightweight duplicate of the Web UI
+            LeanUIHost.Run(parsed);
+        }
+        else if (parsed.IsUiMode)
         {
             // Web UI mode - ASP.NET server with SSE
             WebHost.Run(parsed);

@@ -4,14 +4,14 @@
       "commandName": "Project",
       "nativeDebugging": false
     },
-    "Desktop": {
-      "commandName": "Project",
-      "commandLineArgs": "--desktop",
-      "nativeDebugging": false
-    },
     "WebUI": {
       "commandName": "Project",
       "commandLineArgs": "--ui",
+      "nativeDebugging": false
+    },
+    "LeanUI": {
+      "commandName": "Project",
+      "commandLineArgs": "--leanui",
       "nativeDebugging": false
     },
     "Terminal": {

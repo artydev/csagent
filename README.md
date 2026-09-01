@@ -2,7 +2,7 @@
 
 **CSAgent** is a cross-platform autonomous coding agent that runs on Windows, Linux, and macOS. It uses an OpenAI-compatible API (e.g., [Albert API](https://albert.api.etalab.gouv.fr)) to understand natural-language instructions and autonomously perform coding tasks by reading, writing, and listing files, as well as executing shell commands.
 
-It ships with two presentation modes — a terminal UI (TUI) and a web UI.
+It ships with three presentation modes — a terminal UI (TUI), a web UI, and a lean UI.
 
 ---
 
@@ -12,6 +12,7 @@ It ships with two presentation modes — a terminal UI (TUI) and a web UI.
 - [Modes of Operation](#modes-of-operation)
   - [CLI Mode (Default)](#cli-mode-default)
   - [Web UI Mode](#web-ui-mode)
+  - [Lean UI Mode](#lean-ui-mode)
 - [LLM Models](#llm-models)
 - [Future Features](#future-features)
 - [Environment Variables](#environment-variables)
@@ -82,6 +83,10 @@ In Web UI mode (`--ui` flag), CSAgent starts a local web server with a modern, d
 
 The web UI is served at **http://localhost:5050** by default. Use `--port <n>` (or `-p <n>`) to change the port.
 
+### Lean UI Mode
+
+Lean UI mode (`--leanui` flag) is a lightweight duplicate of the Web UI. It serves the same embedded assets and SSE-based chat endpoints, launched via the `--leanui` command-line argument. It is served at **http://localhost:5050** by default (use `--port <n>` to change it).
+
 ---
 
 ## LLM Models
@@ -129,6 +134,7 @@ The following capabilities are planned for future releases:
 | Argument | Description |
 |---|---|
 | `--ui` | Start in Web UI mode (starts a web server) |
+| `--leanui` | Start in Lean UI mode (lightweight duplicate of the Web UI) |
 | `--mem <file>` | Specify a custom memory/conversation file (default: `agent_memory.json`) |
 | `--model <model>` | Override the default LLM model for the current mode |
 | `--port`, `-p <n>` | Web UI port number (default: `5050`) |
@@ -145,6 +151,9 @@ The following capabilities are planned for future releases:
 ```bash
 # Web UI with custom memory file
 csagent --ui --mem my_project_memory.json
+
+# Lean UI mode
+csagent --leanui
 
 # Web UI on a custom port
 csagent --ui --port 8080

@@ -9,6 +9,7 @@ public sealed record AgentArguments(
     string? McpUrl,
     int Port,
     bool IsUiMode,
+    bool IsLeanUiMode,
     bool IsNativeMode,
     bool IsDryRun,
     bool ShowHelp,
@@ -25,6 +26,7 @@ public static class ArgumentParser
     public static AgentArguments Parse(string[] args)
     {
         var isUiMode = args.Contains("--ui");
+        var isLeanUiMode = args.Contains("--leanui");
         var isNativeMode = args.Contains("--native");
         var isDryRun = args.Contains("--dry-run");
         var showHelp = args.Contains("--help") || args.Contains("-h") || args.Contains("/?");
@@ -38,7 +40,7 @@ public static class ArgumentParser
         var maxRetries = GetInt(args, "--max-retries", RetryPolicy.Default.MaxAttempts);
         var retryDelayMs = GetInt(args, "--retry-delay", RetryPolicy.Default.BaseDelayMs);
 
-        return new AgentArguments(memFile, modelOverride, mcpUrl, port, isUiMode, isNativeMode, isDryRun, showHelp, showVersion, showDoc, maxRetries, retryDelayMs);
+        return new AgentArguments(memFile, modelOverride, mcpUrl, port, isUiMode, isLeanUiMode, isNativeMode, isDryRun, showHelp, showVersion, showDoc, maxRetries, retryDelayMs);
     }
 
     private static string GetMemoryFile(string[] args)
@@ -54,7 +56,7 @@ public static class ArgumentParser
                 continue;
             }
 
-            if (args[i] != "--ui" && args[i] != "--native" && args[i] != "--dry-run" && !args[i].StartsWith("-"))
+            if (args[i] != "--ui" && args[i] != "--leanui" && args[i] != "--native" && args[i] != "--dry-run" && !args[i].StartsWith("-"))
                 return args[i];
         }
 

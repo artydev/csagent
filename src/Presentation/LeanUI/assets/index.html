@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CSAgent Console — Dracula</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Fira+Code:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- Title Bar -->
+  <div id="titleBar">
+    <div class="traffic-lights">
+      <div class="tl tl-red"    title="Close"></div>
+      <div class="tl tl-yellow" title="Minimize"></div>
+      <div class="tl tl-green"  title="Maximize"></div>
+    </div>
+    <span id="titleText">csagent console — dracula edition</span>
+    <span class="title-badge">AGENT</span>
+  </div>
+
+  <!-- Session / Multiplexer Bar -->
+  <div id="sessionBar"></div>
+
+  <!-- Status Bar -->
+  <div id="statusBar">
+    <span class="status-item">
+      <span class="status-dot online" id="connDot"></span>
+      <span id="connStatus">ready</span>
+    </span>
+    <span class="status-sep">│</span>
+    <span class="status-item">agent: <span id="stepCounter" style="color:var(--cyan);margin-left:4px;">ready</span></span>
+    <span class="status-sep">│</span>
+    <span class="status-item" id="toolCount" style="color:var(--orange);">0 tools</span>
+    <span class="status-sep">│</span>
+    <span class="status-item" id="msgCount" style="color:var(--comment);">0 msgs</span>
+  </div>
+
+  <!-- Output Log -->
+  <div id="log"></div>
+
+  <!-- Input Row -->
+  <div id="inputRow">
+    <span id="terminalPrompt">user@agent:~$</span>
+    <input id="input" type="text" autocomplete="off" spellcheck="false" placeholder="enter a prompt or /help…" />
+    <span class="hist-hint" title="↑↓ history">↑↓</span>
+    <span id="stopBtn" title="Stop generation (Esc)">
+      <span class="stop-icon"></span>Stop
+    </span>
+    <div class="input-cursor-hint"></div>
+  </div>
+
+</div>
+
+<!-- Prism must be a classic (non-module) script so it's ready as window.Prism
+     before app.js (a module, deferred by default) executes. -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
