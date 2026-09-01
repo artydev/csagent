@@ -710,9 +710,9 @@ input.addEventListener("keydown", async (e) => {
 });
 
 /* ──────────────────────────────────────────────────────────────
-   BOOT
+   MAIN
 ────────────────────────────────────────────────────────────── */
-async function boot() {
+async function main() {
     try {
         const saved = await get(REGISTRY_KEY);
         if (saved?.list?.length) {
@@ -736,4 +736,4 @@ async function boot() {
     input.focus();
 }
 
-boot();
+main();
