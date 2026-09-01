@@ -8,7 +8,7 @@ namespace CsAgentUI;
 
 public static class Program
 {
-    public const string Version = "0.5";
+    public const string Version = "0.5.1";
 
     [STAThread]
     public static int Main(string[] args)
