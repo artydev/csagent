@@ -16,30 +16,30 @@ import { marked } from 'https://cdn.jsdelivr.net/npm/marked@12/+esm';
 /* ──────────────────────────────────────────────────────────────
    DOM REFS
 ────────────────────────────────────────────────────────────── */
-const log              = document.getElementById("log");
-const input            = document.getElementById("input");
-const sessionBar       = document.getElementById("sessionBar");
-const terminalPrompt   = document.getElementById("terminalPrompt");
-const connDot          = document.getElementById("connDot");
-const connStatusEl     = document.getElementById("connStatus");
-const stepCounterEl    = document.getElementById("stepCounter");
-const toolCountEl      = document.getElementById("toolCount");
-const msgCountEl       = document.getElementById("msgCount");
-const stopBtn          = document.getElementById("stopBtn");
-const imageInput       = document.getElementById("imageInput");
-const attachBtn        = document.getElementById("attachBtn");
+const log = document.getElementById("log");
+const input = document.getElementById("input");
+const sessionBar = document.getElementById("sessionBar");
+const terminalPrompt = document.getElementById("terminalPrompt");
+const connDot = document.getElementById("connDot");
+const connStatusEl = document.getElementById("connStatus");
+const stepCounterEl = document.getElementById("stepCounter");
+const toolCountEl = document.getElementById("toolCount");
+const msgCountEl = document.getElementById("msgCount");
+const stopBtn = document.getElementById("stopBtn");
+const imageInput = document.getElementById("imageInput");
+const attachBtn = document.getElementById("attachBtn");
 const imagePreviewWrap = document.getElementById("imagePreviewWrap");
-const imagePreview     = document.getElementById("imagePreview");
-const clearImageBtn    = document.getElementById("clearImageBtn");
+const imagePreview = document.getElementById("imagePreview");
+const clearImageBtn = document.getElementById("clearImageBtn");
 
 /* ──────────────────────────────────────────────────────────────
    CONSTANTS
 ────────────────────────────────────────────────────────────── */
 // Same-origin SSE chat endpoint exposed by CsAgentUI.Endpoints via
 // app.MapEndpoints(...) in LeanUIHost.Run(). Adjust here if the route differs.
-const CHAT_ENDPOINT  = "/api/chat";
+const CHAT_ENDPOINT = "/api/chat";
 
-const REGISTRY_KEY   = "csagent_registry_config";
+const REGISTRY_KEY = "csagent_registry_config";
 const SESSION_PREFIX = "csagent_session_";
 
 // Friendly labels for known tools (falls back to "🔧 <name>" otherwise).
@@ -49,7 +49,8 @@ const TOOL_LABELS = {
     list_dir: "📂 List Directory",
     search_files: "🔍 Search Files",
     sh: "💻 Shell Command",
-    switch_model: "🔄 Switch Model"
+    switch_model: "🔄 Switch Model",
+    list_models: "🤖 List Models"
 };
 
 /* ──────────────────────────────────────────────────────────────
@@ -70,7 +71,7 @@ let pendingToolBlock = null;
 
 // ── Command History ──────────────────────────────────────────────
 const CMD_HISTORY_MAX = 50;
-let cmdHistory   = [];
+let cmdHistory = [];
 let historyIndex = -1;
 let historyDraft = "";
 
@@ -346,7 +347,7 @@ function setConnStatus(state) {
     connStatusEl.style.color = state === "error" ? "var(--red)" : "var(--green)";
     connStatusEl.textContent =
         state === "error" ? "disconnected" :
-        state === "streaming" ? "streaming" : "ready";
+            state === "streaming" ? "streaming" : "ready";
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -486,7 +487,7 @@ async function handleCreateSession(customName = null) {
         catch (e) { console.error("Failed to save current session before switching:", e); }
     }
 
-    const id   = "s_" + Date.now();
+    const id = "s_" + Date.now();
     const name = customName?.trim() || `session-${registry.list.length}`;
     registry.list.push({ id, name });
     registry.currentActiveId = id;
@@ -548,8 +549,8 @@ async function handleWipeAllSessionsConfirmation() {
 
 async function handleSlashCommand(raw) {
     const parts = raw.trim().split(" ");
-    const cmd   = parts[0].toLowerCase();
-    const args  = parts.slice(1).join(" ");
+    const cmd = parts[0].toLowerCase();
+    const args = parts.slice(1).join(" ");
 
     if (cmd === "/new") {
         await handleCreateSession(args || null);
@@ -559,13 +560,13 @@ async function handleSlashCommand(raw) {
     } else if (cmd === "/help") {
         const cmds = [
             ["  /new [name]", "create a new session tab"],
-            ["  /clear",      "clear the terminal output"],
-            ["  /help",       "show this help message"],
+            ["  /clear", "clear the terminal output"],
+            ["  /help", "show this help message"],
         ];
         const keys = [
-            ["  ↑ / ↓",       "cycle through command history"],
-            ["  Esc",         "stop current generation"],
-            ["  Enter",       "send prompt"],
+            ["  ↑ / ↓", "cycle through command history"],
+            ["  Esc", "stop current generation"],
+            ["  Enter", "send prompt"],
         ];
         print("── commands ──────────────────────────────────", "sys");
         cmds.forEach(([c, d]) => print(`${c.padEnd(18)} — ${d}`, "sys"));
@@ -672,14 +673,14 @@ function startChatStreamPost(promptText, imageFile, targetLog) {
 
     const form = new FormData();
     form.append("prompt", promptText);
-    form.append("image",  imageFile, imageFile.name);
+    form.append("image", imageFile, imageFile.name);
 
     (async () => {
         let response;
         try {
             response = await fetch(CHAT_ENDPOINT, {
                 method: "POST",
-                body:   form,
+                body: form,
                 signal: controller.signal,
             });
         } catch (err) {
@@ -705,9 +706,9 @@ function startChatStreamPost(promptText, imageFile, targetLog) {
         }
 
         // Parse the response body as a stream of SSE lines
-        const reader  = response.body.getReader();
+        const reader = response.body.getReader();
         const decoder = new TextDecoder();
-        let   buffer  = "";
+        let buffer = "";
 
         // eslint-disable-next-line no-constant-condition
         while (true) {
@@ -785,7 +786,7 @@ function stopGeneration() {
 }
 
 async function askAI(promptText) {
-    const cur   = registry.list.find(s => s.id === registry.currentActiveId);
+    const cur = registry.list.find(s => s.id === registry.currentActiveId);
     const label = cur ? cur.name : "~";
 
     // Snapshot and clear the attached file before async work so a second
@@ -863,7 +864,7 @@ input.addEventListener("keydown", async (e) => {
 
     const value = input.value.trim();
     if (!value) return;
-    input.value  = "";
+    input.value = "";
     historyIndex = -1;
     historyDraft = "";
 

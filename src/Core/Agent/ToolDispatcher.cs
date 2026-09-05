@@ -144,6 +144,8 @@ public static class ToolDispatcher
                     args["model"]!.GetValue<string>(),
                     switchModel),
 
+                "list_models" => await ListModelsAsync(),
+
                 _ => $"Error: Unknown tool '{name}'"
             };
         }
@@ -546,6 +548,18 @@ public static class ToolDispatcher
                   "model": { "type": "string", "description": "The model identifier to switch to (e.g. 'openai/gpt-oss-120b')." }
                 },
                 "required": ["model"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "list_models",
+              "description": "List all LLM models available on the Albert API endpoint, with their type and aliases. Use this when the user asks what models are available.",
+              "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
               }
             }
           }
@@ -1734,6 +1748,80 @@ public static class ToolDispatcher
                 _proc.Dispose();
             }
             catch { /* best effort */ }
+        }
+    }
+
+    // ── list_models ──────────────────────────────────────────────────────────
+
+    private static async Task<string> ListModelsAsync()
+    {
+        var apiKey = Environment.GetEnvironmentVariable("ALBERT_API_KEY") ?? "";
+        if (string.IsNullOrEmpty(apiKey))
+            return "Error: list_models — ALBERT_API_KEY environment variable is not set.";
+
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            using var request = new HttpRequestMessage(HttpMethod.Get,
+                "https://albert.api.etalab.gouv.fr/v1/models");
+
+            // AOT-safe: TryAddWithoutValidation avoids any header-type reflection
+            request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {apiKey}");
+
+            using var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+                return $"Error: list_models — API returned {(int)response.StatusCode}: {body}";
+
+            JsonNode? root;
+            try { root = JsonNode.Parse(body); }
+            catch { return $"Error: list_models — Could not parse response: {body}"; }
+
+            var data = root?["data"]?.AsArray();
+            if (data is null || data.Count == 0)
+                return "No models available.";
+
+            // AOT-safe: explicit foreach, no LINQ lambdas, JsonNode traversal only
+            var sb = new StringBuilder();
+            sb.AppendLine($"Available models ({data.Count}):");
+
+            foreach (var model in data)
+            {
+                var id = model?["id"]?.GetValue<string>() ?? "(unknown)";
+                var type = model?["type"]?.GetValue<string>() ?? "";
+
+                sb.Append($"  • {id}");
+                if (!string.IsNullOrEmpty(type))
+                    sb.Append($"  [{type}]");
+                sb.AppendLine();
+
+                var aliases = model?["aliases"]?.AsArray();
+                if (aliases is { Count: > 0 })
+                {
+                    sb.Append("    aliases: ");
+                    for (int i = 0; i < aliases.Count; i++)
+                    {
+                        if (i > 0) sb.Append(", ");
+                        sb.Append(aliases[i]?.GetValue<string>() ?? "");
+                    }
+                    sb.AppendLine();
+                }
+            }
+
+            return sb.ToString().TrimEnd();
+        }
+        catch (TaskCanceledException)
+        {
+            return "Error: list_models — request timed out after 15 s.";
+        }
+        catch (HttpRequestException ex)
+        {
+            return $"Error: list_models — HTTP error: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            return $"Error: list_models — {ex.Message}";
         }
     }
 
