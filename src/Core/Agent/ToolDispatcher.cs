@@ -1762,8 +1762,12 @@ public static class ToolDispatcher
         try
         {
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+
+            // ?status=true asks the Albert API to include real-time availability
+            // information for each model in the response (additional "status" field
+            // on each model object, e.g. "available", "unavailable", "degraded").
             using var request = new HttpRequestMessage(HttpMethod.Get,
-                "https://albert.api.etalab.gouv.fr/v1/models");
+                "https://albert.api.etalab.gouv.fr/v1/models?status=true");
 
             // AOT-safe: TryAddWithoutValidation avoids any header-type reflection
             request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {apiKey}");
@@ -1785,25 +1789,43 @@ public static class ToolDispatcher
             // AOT-safe: explicit foreach, no LINQ lambdas, JsonNode traversal only
             var sb = new StringBuilder();
             sb.AppendLine($"Available models ({data.Count}):");
+            sb.AppendLine();
 
             foreach (var model in data)
             {
                 var id = model?["id"]?.GetValue<string>() ?? "(unknown)";
                 var type = model?["type"]?.GetValue<string>() ?? "";
+                var ownedBy = model?["owned_by"]?.GetValue<string>() ?? "";
+                var status = model?["status"]?.GetValue<string>() ?? "";
 
-                sb.Append($"  • {id}");
+                // Status indicator: ✓ available, ✗ unavailable, ~ degraded, ? unknown
+                var statusIcon = status switch
+                {
+                    "available" => "✓",
+                    "unavailable" => "✗",
+                    "degraded" => "~",
+                    "" => " ",
+                    _ => "?"
+                };
+
+                sb.Append($"  [{statusIcon}] {id}");
                 if (!string.IsNullOrEmpty(type))
                     sb.Append($"  [{type}]");
+                if (!string.IsNullOrEmpty(ownedBy))
+                    sb.Append($"  ({ownedBy})");
+                if (!string.IsNullOrEmpty(status))
+                    sb.Append($"  — {status}");
                 sb.AppendLine();
 
                 var aliases = model?["aliases"]?.AsArray();
                 if (aliases is { Count: > 0 })
                 {
-                    sb.Append("    aliases: ");
+                    sb.Append("      aliases: ");
                     for (int i = 0; i < aliases.Count; i++)
                     {
                         if (i > 0) sb.Append(", ");
-                        sb.Append(aliases[i]?.GetValue<string>() ?? "");
+                        // Alias elements are plain strings — use JsonValue guard for AOT safety
+                        sb.Append(aliases[i] is JsonValue av ? av.GetValue<string>() : aliases[i]?.ToJsonString() ?? "");
                     }
                     sb.AppendLine();
                 }
