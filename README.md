@@ -87,6 +87,20 @@ The web UI is served at **http://localhost:5050** by default. Use `--port <n>` (
 
 Lean UI mode (`--leanui` flag) is a lightweight duplicate of the Web UI. It serves the same embedded assets and SSE-based chat endpoints, launched via the `--leanui` command-line argument. It is served at **http://localhost:5050** by default (use `--port <n>` to change it).
 
+### Vision / Image Attachments
+
+CSAgent supports **multimodal (vision) prompts** — you can attach an image to a prompt and the agent will analyze it. This works in both the Web UI and the Lean UI, and in the CLI/TUI.
+
+- **Web UI / Lean UI:** click the **📎** (paperclip) button next to the input box to attach an image. A small preview appears; click **✕** to remove it before sending. Supported formats: **PNG, JPEG, GIF, WebP** (max **10 MB**).
+- **CLI / TUI:** image attachment is handled through the conversation history — once a vision exchange has occurred, the agent automatically keeps using the vision-capable model for the rest of the session.
+
+When an image is attached, CSAgent automatically routes the request to a **vision-capable model** (`gemma-4-31b-it` by default) instead of the standard text model. This routing is automatic and happens in two cases:
+
+1. The current prompt includes an attached image.
+2. The conversation history already contains an image from a previous exchange (text-only models reject requests whose history contains image content).
+
+You can override the vision model with the `--model` argument, and the default vision model is defined by `LlmSettings.VisionModel`.
+
 ---
 
 ## LLM Models
@@ -97,6 +111,7 @@ CSAgent uses different LLM models depending on the mode of operation. This is in
 |---|---|---|
 | **CLI** | `deepseek-v4-flash` | Fast, lightweight, ideal for interactive terminal sessions where quick turnarounds matter |
 | **Web UI** | `Qwen/Qwen3-Coder-30B-A3B-Instruct` | More capable for complex multi-step coding tasks; the Web UI is designed for longer, more involved sessions |
+| **Vision (any mode)** | `gemma-4-31b-it` | Used automatically when an image is attached to a prompt (or present in the conversation history); see [Vision / Image Attachments](#vision--image-attachments) |
 
 You can override the default model in any mode using the `--model` argument (see [Command-Line Arguments](#command-line-arguments)).
 
@@ -359,6 +374,12 @@ File operations are restricted to the current working directory. Change to the t
 
 ### Browser doesn't open automatically
 Navigate manually to **http://localhost:5050** in your browser (or the port you chose with `--port`).
+
+### "Unsupported image type" / image won't attach
+Only **PNG, JPEG, GIF, and WebP** images are supported, and the file must be **10 MB or smaller**. If you're attaching a different format (e.g. BMP, TIFF, SVG), convert it to a supported format first.
+
+### "Expected multipart/form-data"
+This error appears when the `/api/chat` endpoint is called with a `POST` that isn't `multipart/form-data`. The Web UI and Lean UI send the correct content type automatically; this usually only happens with a hand-written client.
 
 ---
 
