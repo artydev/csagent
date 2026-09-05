@@ -16,16 +16,21 @@ import { marked } from 'https://cdn.jsdelivr.net/npm/marked@12/+esm';
 /* ──────────────────────────────────────────────────────────────
    DOM REFS
 ────────────────────────────────────────────────────────────── */
-const log            = document.getElementById("log");
-const input          = document.getElementById("input");
-const sessionBar     = document.getElementById("sessionBar");
-const terminalPrompt = document.getElementById("terminalPrompt");
-const connDot        = document.getElementById("connDot");
-const connStatusEl   = document.getElementById("connStatus");
-const stepCounterEl  = document.getElementById("stepCounter");
-const toolCountEl    = document.getElementById("toolCount");
-const msgCountEl     = document.getElementById("msgCount");
-const stopBtn        = document.getElementById("stopBtn");
+const log              = document.getElementById("log");
+const input            = document.getElementById("input");
+const sessionBar       = document.getElementById("sessionBar");
+const terminalPrompt   = document.getElementById("terminalPrompt");
+const connDot          = document.getElementById("connDot");
+const connStatusEl     = document.getElementById("connStatus");
+const stepCounterEl    = document.getElementById("stepCounter");
+const toolCountEl      = document.getElementById("toolCount");
+const msgCountEl       = document.getElementById("msgCount");
+const stopBtn          = document.getElementById("stopBtn");
+const imageInput       = document.getElementById("imageInput");
+const attachBtn        = document.getElementById("attachBtn");
+const imagePreviewWrap = document.getElementById("imagePreviewWrap");
+const imagePreview     = document.getElementById("imagePreview");
+const clearImageBtn    = document.getElementById("clearImageBtn");
 
 /* ──────────────────────────────────────────────────────────────
    CONSTANTS
@@ -71,6 +76,9 @@ let historyDraft = "";
 
 // ── Active SSE connection ───────────────────────────────────────
 let currentStream = null;
+
+// ── Attached image file (set by the file picker, cleared after send) ─
+let attachedFile = null;
 
 function setGenerating(on) {
     if (on) {
@@ -570,10 +578,59 @@ async function handleSlashCommand(raw) {
 }
 
 /* ──────────────────────────────────────────────────────────────
-   SECTION 7 — SSE Chat Stream
+   SECTION 7 — Image attach helpers
 ────────────────────────────────────────────────────────────── */
 
-function startChatStream(promptText, targetLog) {
+function setAttachedFile(file) {
+    attachedFile = file;
+    if (file) {
+        const objectUrl = URL.createObjectURL(file);
+        imagePreview.src = objectUrl;
+        imagePreviewWrap.style.display = "flex";
+        attachBtn.classList.add("has-image");
+    } else {
+        imagePreview.src = "";
+        imagePreviewWrap.style.display = "none";
+        attachBtn.classList.remove("has-image");
+        imageInput.value = "";
+    }
+}
+
+attachBtn.addEventListener("click", () => imageInput.click());
+
+imageInput.addEventListener("change", () => {
+    const file = imageInput.files?.[0] ?? null;
+    setAttachedFile(file);
+});
+
+clearImageBtn.addEventListener("click", () => setAttachedFile(null));
+
+/* ──────────────────────────────────────────────────────────────
+   SECTION 8 — SSE Chat Stream
+────────────────────────────────────────────────────────────── */
+
+/**
+ * Handle one parsed SSE event object {type, data}.
+ * Returns true when the stream should be considered finished.
+ */
+function handleSseMessage(message, targetLog) {
+    if (message.type === "step") {
+        updateStepCounter(message.data);
+        return false;
+    }
+
+    appendMessageToLog(message, targetLog);
+    persistEntry({ kind: "event", type: message.type, data: message.data });
+    scrollToBottom(targetLog);
+    updateStatusBar();
+
+    return message.type === "done" || message.type === "error" || message.type === "danger";
+}
+
+/**
+ * Text-only path: GET /api/chat via EventSource (kept for backward compat).
+ */
+function startChatStreamGet(promptText, targetLog) {
     const url = `${CHAT_ENDPOINT}?prompt=${encodeURIComponent(promptText)}`;
     const stream = new EventSource(url);
 
@@ -581,17 +638,8 @@ function startChatStream(promptText, targetLog) {
         let message;
         try { message = JSON.parse(event.data); } catch { return; }
 
-        if (message.type === "step") {
-            updateStepCounter(message.data);
-            return;
-        }
-
-        appendMessageToLog(message, targetLog);
-        persistEntry({ kind: "event", type: message.type, data: message.data });
-        scrollToBottom(targetLog);
-        updateStatusBar();
-
-        if (message.type === "done" || message.type === "error" || message.type === "danger") {
+        const finished = handleSseMessage(message, targetLog);
+        if (finished) {
             resetStepCounter();
             stream.close();
             currentStream = null;
@@ -610,7 +658,119 @@ function startChatStream(promptText, targetLog) {
         saveAllToBrowser();
     };
 
+    // Return an object with a .close() so stopGeneration() works uniformly
     return stream;
+}
+
+/**
+ * Image path: POST /api/chat via fetch + ReadableStream.
+ * EventSource only supports GET, so we use fetch to stream the SSE response
+ * from a multipart/form-data POST. The AbortController lets us cancel it.
+ */
+function startChatStreamPost(promptText, imageFile, targetLog) {
+    const controller = new AbortController();
+
+    const form = new FormData();
+    form.append("prompt", promptText);
+    form.append("image",  imageFile, imageFile.name);
+
+    (async () => {
+        let response;
+        try {
+            response = await fetch(CHAT_ENDPOINT, {
+                method: "POST",
+                body:   form,
+                signal: controller.signal,
+            });
+        } catch (err) {
+            if (err.name === "AbortError") return;
+            print("✗ Failed to connect to agent.", "err");
+            resetStepCounter();
+            currentStream = null;
+            setGenerating(false);
+            setConnStatus("error");
+            saveAllToBrowser();
+            return;
+        }
+
+        if (!response.ok) {
+            const text = await response.text().catch(() => response.statusText);
+            print(`✗ Server error ${response.status}: ${text}`, "err");
+            resetStepCounter();
+            currentStream = null;
+            setGenerating(false);
+            setConnStatus("error");
+            saveAllToBrowser();
+            return;
+        }
+
+        // Parse the response body as a stream of SSE lines
+        const reader  = response.body.getReader();
+        const decoder = new TextDecoder();
+        let   buffer  = "";
+
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+            let done, value;
+            try {
+                ({ done, value } = await reader.read());
+            } catch (err) {
+                if (err.name !== "AbortError") {
+                    print("✗ Stream read error.", "err");
+                    setConnStatus("error");
+                }
+                break;
+            }
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // SSE events are separated by double newlines
+            const parts = buffer.split("\n\n");
+            buffer = parts.pop(); // keep the incomplete trailing chunk
+
+            for (const part of parts) {
+                // Each part may have one or more "data: ..." lines
+                for (const line of part.split("\n")) {
+                    if (!line.startsWith("data:")) continue;
+                    const raw = line.slice(5).trim();
+                    let message;
+                    try { message = JSON.parse(raw); } catch { continue; }
+
+                    const finished = handleSseMessage(message, targetLog);
+                    if (finished) {
+                        resetStepCounter();
+                        currentStream = null;
+                        setGenerating(false);
+                        saveAllToBrowser();
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Stream ended without an explicit done/error event
+        if (currentStream !== null) {
+            resetStepCounter();
+            currentStream = null;
+            setGenerating(false);
+            saveAllToBrowser();
+        }
+    })();
+
+    // Return an object with .close() so stopGeneration() works uniformly
+    return { close: () => controller.abort() };
+}
+
+/**
+ * Public entry point — dispatches to GET or POST path depending on
+ * whether an image is attached.
+ */
+function startChatStream(promptText, imageFile, targetLog) {
+    if (imageFile) {
+        return startChatStreamPost(promptText, imageFile, targetLog);
+    }
+    return startChatStreamGet(promptText, targetLog);
 }
 
 function stopGeneration() {
@@ -628,14 +788,29 @@ async function askAI(promptText) {
     const cur   = registry.list.find(s => s.id === registry.currentActiveId);
     const label = cur ? cur.name : "~";
 
-    appendUserMessage(promptText, log, label);
-    persistEntry({ kind: "user", content: promptText });
+    // Snapshot and clear the attached file before async work so a second
+    // submit can't accidentally re-use the same image.
+    const imageFile = attachedFile;
+    setAttachedFile(null);
+
+    // Show image indicator in the log when an image is attached
+    if (imageFile) {
+        const imgLine = document.createElement("div");
+        imgLine.className = "line sys";
+        imgLine.textContent = `📎 [image: ${imageFile.name}] ${promptText}`;
+        log.appendChild(imgLine);
+        persistEntry({ kind: "user", content: `[image: ${imageFile.name}] ${promptText}` });
+    } else {
+        appendUserMessage(promptText, log, label);
+        persistEntry({ kind: "user", content: promptText });
+    }
+
     updateStatusBar();
     await saveAllToBrowser();
 
     pendingToolBlock = null;
     setGenerating(true);
-    currentStream = startChatStream(promptText, log);
+    currentStream = startChatStream(promptText, imageFile, log);
 }
 
 /* ──────────────────────────────────────────────────────────────

@@ -24,21 +24,11 @@ public static class TuiHost
         if (messages.Count == 0)
             messages.Add(CodingAgent.SystemMessage(OperatingSystem.IsWindows()));
 
-        var model = args.ModelOverride ?? LlmSettings.Model;
-        Console.WriteLine($"  Model: {model}");
         if (!string.IsNullOrWhiteSpace(args.McpUrl))
             Console.WriteLine($"  MCP: {args.McpUrl}");
         if (args.IsDryRun)
             Console.WriteLine("  Dry-run: ON (no changes will be made)");
         Console.WriteLine();
-
-        using var agent = new CodingAgent(
-            apiKey,
-            LlmSettings.Endpoint,
-            model,
-            new AgentOptions(Confirm: true, DryRun: args.IsDryRun, Retry: new RetryPolicy(args.MaxRetries, args.RetryDelayMs)),
-            new ConsoleObserver(),
-            args.McpUrl);
 
         while (true)
         {
@@ -48,6 +38,24 @@ public static class TuiHost
             if (input.Trim().Equals("exit", StringComparison.OrdinalIgnoreCase)) break;
 
             messages.Add(JsonHelpers.Message("user", input));
+
+            // Re-evaluate the model on every turn: if the history contains image_url
+            // blocks from a previous vision exchange, we must keep using the vision
+            // model — text-only models reject requests whose history has image content.
+            var model = args.ModelOverride
+                        ?? (JsonHelpers.HistoryContainsImage(messages)
+                                ? LlmSettings.VisionModel
+                                : LlmSettings.Model);
+            Console.WriteLine($"  [model: {model}]");
+
+            using var agent = new CodingAgent(
+                apiKey,
+                LlmSettings.Endpoint,
+                model,
+                new AgentOptions(Confirm: true, DryRun: args.IsDryRun, Retry: new RetryPolicy(args.MaxRetries, args.RetryDelayMs)),
+                new ConsoleObserver(),
+                args.McpUrl);
+
             await agent.RunAsync(messages, args.MemoryFile);
         }
     }

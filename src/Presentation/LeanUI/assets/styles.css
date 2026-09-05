@@ -641,6 +641,47 @@ body::before {
 }
 #inputRow:focus-within .hist-hint { color: var(--comment); }
 
+/* ─── IMAGE ATTACH ────────────────────────────────────────────── */
+#attachBtn {
+  font-size: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.55;
+  transition: opacity .15s, transform .15s;
+  user-select: none;
+  padding: 0 2px;
+}
+#attachBtn:hover { opacity: 1; transform: scale(1.15); }
+#attachBtn.has-image { opacity: 1; color: var(--cyan); }
+
+#imagePreviewWrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--cyan);
+  border-radius: var(--radius);
+  padding: 2px 5px;
+}
+
+#imagePreview {
+  height: 22px;
+  width: auto;
+  border-radius: 2px;
+  object-fit: cover;
+  display: block;
+}
+
+#clearImageBtn {
+  font-size: 9px;
+  color: var(--comment);
+  cursor: pointer;
+  line-height: 1;
+  transition: color .12s;
+}
+#clearImageBtn:hover { color: var(--red); }
+
 /* ─── RESPONSIVE ──────────────────────────────────────────────── */
 @media (max-width: 600px) {
   #titleText { display: none; }
