@@ -247,6 +247,50 @@ function createGenericMessage(type, content) {
  * append it to the log. Handles "call"/"result" pairing specially since
  * they need to merge into one collapsible block rather than two lines.
  */
+function createConfirmBlock(toolName) {
+    const wrap = document.createElement("div");
+    wrap.className = "confirm-block";
+    wrap.dataset.pending = "1";
+
+    const label = document.createElement("span");
+    label.className = "confirm-label";
+    label.textContent = `⚠ Allow destructive action: ${toolName}`;
+    wrap.appendChild(label);
+
+    const btnWrap = document.createElement("div");
+    btnWrap.className = "confirm-btns";
+
+    function resolve(allow) {
+        if (!wrap.dataset.pending) return;
+        delete wrap.dataset.pending;
+        btnWrap.remove();
+        const resp = document.createElement("span");
+        resp.className = allow ? "confirm-approved" : "confirm-declined";
+        resp.textContent = allow ? "✓ Approved" : "✗ Declined";
+        wrap.appendChild(resp);
+        fetch("/api/confirm", {
+            method: "POST",
+            headers: { "Content-Type": "text/plain" },
+            body: allow ? "true" : "false"
+        }).catch(err => console.error("confirm POST failed:", err));
+    }
+
+    const approveBtn = document.createElement("button");
+    approveBtn.className = "confirm-btn confirm-approve";
+    approveBtn.textContent = "✓ Approve";
+    approveBtn.addEventListener("click", () => resolve(true));
+
+    const declineBtn = document.createElement("button");
+    declineBtn.className = "confirm-btn confirm-decline";
+    declineBtn.textContent = "✗ Decline";
+    declineBtn.addEventListener("click", () => resolve(false));
+
+    btnWrap.appendChild(approveBtn);
+    btnWrap.appendChild(declineBtn);
+    wrap.appendChild(btnWrap);
+    return wrap;
+}
+
 function appendMessageToLog(message, targetLog) {
     switch (message.type) {
         case "done":
@@ -273,6 +317,12 @@ function appendMessageToLog(message, targetLog) {
         case "result": {
             const { r: resultText, e: isError } = message.data || {};
             applyToolResult(resultText, isError, targetLog);
+            return;
+        }
+        case "confirm": {
+            const toolName = typeof message.data === "object" ? message.data.tool : message.data;
+            targetLog.appendChild(createConfirmBlock(toolName));
+            scrollToBottom(targetLog);
             return;
         }
         default:

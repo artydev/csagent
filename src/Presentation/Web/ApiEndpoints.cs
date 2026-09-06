@@ -15,11 +15,28 @@ public static class ApiEndpoints
         string? mcpUrl = null,
         RetryPolicy? retry = null)
     {
+        // ── Shared per-request confirmation broker ───────────────────────────
+        // One broker lives for the lifetime of the server. Only one agent runs
+        // at a time per server instance, so a single broker is sufficient.
+        var broker = new ConfirmationBroker();
+
+        // ── POST /api/confirm — resolve a pending confirmation ────────────────
+        app.MapPost("/api/confirm", async (HttpContext ctx) =>
+        {
+            using var sr = new StreamReader(ctx.Request.Body);
+            var body = await sr.ReadToEndAsync();
+            // Body is plain "true" or "false"
+            var allow = body.Trim().Equals("true", StringComparison.OrdinalIgnoreCase);
+            var resolved = broker.Resolve(allow);
+            ctx.Response.StatusCode = resolved ? 200 : 409; // 409 = nothing pending
+            await ctx.Response.WriteAsync(resolved ? "ok" : "no pending confirmation");
+        });
+
         // ── GET /api/chat — text-only prompt (legacy / EventSource path) ──────
         app.MapGet("/api/chat", async (HttpContext ctx, string prompt) =>
         {
             await RunChatAsync(ctx, prompt, imageBase64: null, imageMime: null,
-                               memoryFile, modelOverride, mcpUrl, retry);
+                               memoryFile, modelOverride, mcpUrl, retry, broker);
         });
 
         // ── POST /api/chat — multipart: prompt + optional image ───────────────
@@ -55,7 +72,7 @@ public static class ApiEndpoints
 
             // Optional image file
             string? imageBase64 = null;
-            string? imageMime   = null;
+            string? imageMime = null;
 
             var file = form.Files.GetFile("image");
             if (file is { Length: > 0 })
@@ -84,7 +101,7 @@ public static class ApiEndpoints
             }
 
             await RunChatAsync(ctx, prompt, imageBase64, imageMime,
-                               memoryFile, modelOverride, mcpUrl, retry);
+                               memoryFile, modelOverride, mcpUrl, retry, broker);
         });
 
         return app;
@@ -100,12 +117,13 @@ public static class ApiEndpoints
         string memoryFile,
         string? modelOverride,
         string? mcpUrl,
-        RetryPolicy? retry)
+        RetryPolicy? retry,
+        ConfirmationBroker broker)
     {
         ctx.Response.Headers.ContentType = "text/event-stream";
         ctx.Response.Headers.CacheControl = "no-cache";
 
-        var observer = new SseObserver(ctx.Response);
+        var observer = new SseObserver(ctx.Response, broker);
 
         var apiKey = Environment.GetEnvironmentVariable("ALBERT_API_KEY") ?? "";
         if (string.IsNullOrEmpty(apiKey))
@@ -159,10 +177,10 @@ public static class ApiEndpoints
         return ext switch
         {
             ".jpg" or ".jpeg" => "image/jpeg",
-            ".png"            => "image/png",
-            ".gif"            => "image/gif",
-            ".webp"           => "image/webp",
-            _                 => string.IsNullOrWhiteSpace(browserContentType)
+            ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            _ => string.IsNullOrWhiteSpace(browserContentType)
                                      ? "application/octet-stream"
                                      : browserContentType
         };

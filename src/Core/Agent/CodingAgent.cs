@@ -132,7 +132,8 @@ public sealed class CodingAgent : IDisposable
                 }
                 else if (_opts.Confirm && ToolDispatcher.IsDestructive(funcName))
                 {
-                    result = UI.Confirm($"Allow destructive action '{funcName}'?")
+                    var allowed = await _observer.OnConfirm(funcName);
+                    result = allowed
                         ? await ToolDispatcher.DispatchAsync(funcName, argsRaw, isWindows, switchModel)
                         : "Tool call declined by user.";
                 }

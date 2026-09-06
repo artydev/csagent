@@ -12,4 +12,5 @@ public class ConsoleObserver : IAgentObserver
     public Task OnError(string m) { UI.Error(m); return Task.CompletedTask; }
     public Task OnWarning(string m) { UI.Warning(m); return Task.CompletedTask; }
     public Task OnDanger(string m) { UI.Danger(m); return Task.CompletedTask; }
+    public Task<bool> OnConfirm(string toolName) => Task.FromResult(UI.Confirm($"Allow destructive action '{toolName}'?"));
 }

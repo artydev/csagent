@@ -476,6 +476,71 @@ input {
     }
 }
 
+/* ── Confirmation block ── */
+
+.confirm-block {
+    background: rgba(255,184,108,.08);
+    border-left: 4px solid #ffb86c;
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.confirm-label {
+    font-size: 13px;
+    color: #ffb86c;
+    font-weight: 600;
+}
+
+.confirm-btns {
+    display: flex;
+    gap: 8px;
+}
+
+.confirm-btn {
+    padding: 5px 16px;
+    border-radius: 8px;
+    border: 1px solid;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background .12s;
+}
+
+.confirm-approve {
+    background: rgba(80,250,123,.12);
+    border-color: #50fa7b;
+    color: #50fa7b;
+}
+
+    .confirm-approve:hover {
+        background: rgba(80,250,123,.28);
+    }
+
+.confirm-decline {
+    background: rgba(255,85,85,.12);
+    border-color: #ff5555;
+    color: #ff5555;
+}
+
+    .confirm-decline:hover {
+        background: rgba(255,85,85,.28);
+    }
+
+.confirm-approved {
+    color: #50fa7b;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.confirm-declined {
+    color: #ff5555;
+    font-size: 12px;
+    font-weight: 600;
+}
+
 /* ── Input row (attach + stop) ── */
 
 .input-row {
