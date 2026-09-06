@@ -55,10 +55,18 @@
         </header>
         <div id="log"></div>
         <div class="input-area">
-            <input id="in"
-                   autocomplete="off"
-                   placeholder="Ask CSAgent anything... (All destructive actions require approval)"
-                   onkeypress="if(event.key==='Enter'){run();}">
+            <div class="input-row">
+                <input id="in"
+                       autocomplete="off"
+                       placeholder="Ask CSAgent anything... (All destructive actions require approval)">
+                <input id="imageInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none" />
+                <span id="attachBtn" title="Attach image for vision analysis">📎</span>
+                <span id="imagePreviewWrap" style="display:none">
+                    <img id="imagePreview" alt="attached" />
+                    <span id="clearImageBtn" title="Remove image">✕</span>
+                </span>
+                <button id="stopBtn" onclick="stopGeneration()" title="Stop generation (Esc)">■ Stop</button>
+            </div>
         </div>
     </div>
     <script src="app.js"></script>

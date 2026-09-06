@@ -153,7 +153,8 @@ function createToolCallMessage(name, argsJson) {
         "list_dir": "📂 List Directory",
         "search_files": "🔍 Search Files",
         "sh": "💻 Shell Command",
-        "switch_model": "🔄 Switch Model"
+        "switch_model": "🔄 Switch Model",
+        "list_models": "🤖 List Models"
     };
     header.innerHTML = `<strong>${toolLabels[name] || "🔧 " + name}</strong>`;
     div.appendChild(header);
@@ -357,35 +358,68 @@ function appendUserMessage(prompt, log) {
 }
 
 // -----------------------------------------------------------------------------
-// SECTION 5 — SSE (Server-Sent Events) Stream
+// SECTION 5 — Image Attach
+// -----------------------------------------------------------------------------
+
+const imageInput = document.getElementById("imageInput");
+const attachBtn = document.getElementById("attachBtn");
+const imagePreviewWrap = document.getElementById("imagePreviewWrap");
+const imagePreview = document.getElementById("imagePreview");
+const clearImageBtn = document.getElementById("clearImageBtn");
+const stopBtn = document.getElementById("stopBtn");
+
+let attachedFile = null;
+let currentStream = null;
+
+function setAttachedFile(file) {
+    attachedFile = file;
+    if (file) {
+        imagePreview.src = URL.createObjectURL(file);
+        imagePreviewWrap.style.display = "flex";
+        attachBtn.classList.add("has-image");
+    } else {
+        imagePreview.src = "";
+        imagePreviewWrap.style.display = "none";
+        attachBtn.classList.remove("has-image");
+        imageInput.value = "";
+    }
+}
+
+attachBtn.addEventListener("click", () => imageInput.click());
+imageInput.addEventListener("change", () => setAttachedFile(imageInput.files?.[0] ?? null));
+clearImageBtn.addEventListener("click", () => setAttachedFile(null));
+
+// -----------------------------------------------------------------------------
+// SECTION 6 — SSE Stream (GET for text-only, POST for image)
 // -----------------------------------------------------------------------------
 
 /**
- * Open an SSE connection to the chat endpoint and wire up event handlers.
- *
- * @param {string} prompt — The user's input prompt
- * @param {HTMLElement} log — The log container element
- * @returns {EventSource}
+ * Shared SSE message handler. Returns true when the stream should be closed.
  */
-function startChatStream(prompt, log) {
+function handleSseMessage(message, log) {
+    if (message.type === "step") {
+        updateStepCounter(message.data);
+        return false;
+    }
+    appendMessageToLog(message, log);
+    scrollToBottom(log);
+    return message.type === "done" || message.type === "error" || message.type === "danger";
+}
+
+/**
+ * Text-only path: GET /api/chat via EventSource.
+ */
+function startChatStreamGet(prompt, log) {
     const url = `/api/chat?prompt=${encodeURIComponent(prompt)}`;
     const stream = new EventSource(url);
 
     stream.onmessage = function (event) {
         const message = JSON.parse(event.data);
-
-        // Handle step events in the header counter, not in the log
-        if (message.type === "step") {
-            updateStepCounter(message.data);
-            return;
-        }
-
-        appendMessageToLog(message, log);
-        scrollToBottom(log);
-
-        if (message.type === "done" || message.type === "error" || message.type === "danger") {
+        if (handleSseMessage(message, log)) {
             resetStepCounter();
             stream.close();
+            currentStream = null;
+            setGenerating(false);
         }
     };
 
@@ -393,31 +427,183 @@ function startChatStream(prompt, log) {
         console.error("SSE connection error — closing stream.");
         resetStepCounter();
         stream.close();
+        currentStream = null;
+        setGenerating(false);
     };
 
     return stream;
 }
 
+/**
+ * Image path: POST /api/chat via fetch + ReadableStream.
+ * EventSource only supports GET, so we use fetch for multipart POST.
+ */
+function startChatStreamPost(prompt, imageFile, log) {
+    const controller = new AbortController();
+
+    const form = new FormData();
+    form.append("prompt", prompt);
+    form.append("image", imageFile, imageFile.name);
+
+    (async () => {
+        let response;
+        try {
+            response = await fetch("/api/chat", {
+                method: "POST",
+                body: form,
+                signal: controller.signal,
+            });
+        } catch (err) {
+            if (err.name !== "AbortError") {
+                console.error("Fetch error:", err);
+            }
+            resetStepCounter();
+            currentStream = null;
+            setGenerating(false);
+            return;
+        }
+
+        if (!response.ok) {
+            const text = await response.text().catch(() => response.statusText);
+            const errDiv = document.createElement("div");
+            errDiv.className = "danger";
+            errDiv.textContent = `✗ Server error ${response.status}: ${text}`;
+            log.appendChild(errDiv);
+            scrollToBottom(log);
+            resetStepCounter();
+            currentStream = null;
+            setGenerating(false);
+            return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+            let done, value;
+            try { ({ done, value } = await reader.read()); }
+            catch (err) {
+                if (err.name !== "AbortError") console.error("Stream read error:", err);
+                break;
+            }
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split("\n\n");
+            buffer = parts.pop();
+
+            for (const part of parts) {
+                for (const line of part.split("\n")) {
+                    if (!line.startsWith("data:")) continue;
+                    let message;
+                    try { message = JSON.parse(line.slice(5).trim()); } catch { continue; }
+                    if (handleSseMessage(message, log)) {
+                        resetStepCounter();
+                        currentStream = null;
+                        setGenerating(false);
+                        return;
+                    }
+                }
+            }
+        }
+
+        if (currentStream !== null) {
+            resetStepCounter();
+            currentStream = null;
+            setGenerating(false);
+        }
+    })();
+
+    return { close: () => controller.abort() };
+}
+
+function setGenerating(active) {
+    stopBtn.disabled = !active;
+}
+
+function stopGeneration() {
+    if (!currentStream) return;
+    currentStream.close();
+    currentStream = null;
+    resetStepCounter();
+    setGenerating(false);
+    const log = document.getElementById("log");
+    const div = document.createElement("div");
+    div.className = "warning";
+    div.textContent = "⚠ Generation stopped by user.";
+    log.appendChild(div);
+    scrollToBottom(log);
+}
+
 // -----------------------------------------------------------------------------
-// SECTION 6 — Main Entry Point
+// SECTION 7 — Main Entry Point + Keyboard Wiring
 // -----------------------------------------------------------------------------
 
 /**
- * Main entry point — called when the user presses Enter in the input field.
- *
- * Reads the prompt, displays it in the log, clears the input, and starts
- * an SSE stream for the response.
+ * Main entry point — called on Enter or button click.
  */
 function run() {
     const input = document.getElementById("in");
     const prompt = input.value.trim();
-    if (!prompt) return;
+    if (!prompt || currentStream) return;
 
     const log = document.getElementById("log");
 
-    appendUserMessage(prompt, log);
+    // Show image indicator in log when an image is attached
+    if (attachedFile) {
+        const div = document.createElement("div");
+        div.className = "user-msg";
+        div.innerHTML = `<strong>> User:</strong> 📎 [${attachedFile.name}] ${prompt}`;
+        log.appendChild(div);
+    } else {
+        appendUserMessage(prompt, log);
+    }
+
+    const imageFile = attachedFile;
+    setAttachedFile(null);
     input.value = "";
     scrollToBottom(log);
 
-    startChatStream(prompt, log);
+    setGenerating(true);
+    currentStream = imageFile
+        ? startChatStreamPost(prompt, imageFile, log)
+        : startChatStreamGet(prompt, log);
 }
+
+// Command history state
+const cmdHistory = [];
+let histIndex = -1;
+
+// Single keydown listener — history push must happen before run() clears the input
+document.getElementById("in").addEventListener("keydown", function (e) {
+    if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (histIndex < cmdHistory.length - 1) {
+            histIndex++;
+            this.value = cmdHistory[histIndex];
+        }
+    } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (histIndex > 0) {
+            histIndex--;
+            this.value = cmdHistory[histIndex];
+        } else {
+            histIndex = -1;
+            this.value = "";
+        }
+    } else if (e.key === "Enter" && !e.shiftKey) {
+        const prompt = this.value.trim();
+        if (prompt) {
+            cmdHistory.unshift(prompt); // push before run() clears the field
+            if (cmdHistory.length > 50) cmdHistory.pop();
+            histIndex = -1;
+        }
+        run();
+    } else if (e.key === "Escape") {
+        stopGeneration();
+    }
+});
+
+// Initialise stop button state
+setGenerating(false);
