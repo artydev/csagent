@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using CsAgentUI.Core.Agent;
+using CsAgentUI.Core.Tasks;
 using CsAgentUI.Shared;
 
 namespace CsAgentUI;
@@ -12,6 +13,7 @@ public sealed class CodingAgent : IDisposable
     private readonly McpClient? _mcp;
     private JsonArray? _toolDefinitions;
     private CancellationTokenSource? _cts;
+    private TaskTracker? _tracker;
 
     public CodingAgent(
         string apiKey,
@@ -35,6 +37,9 @@ public sealed class CodingAgent : IDisposable
     {
         _cts = new CancellationTokenSource();
         var isWindows = OperatingSystem.IsWindows();
+
+        if (!string.IsNullOrWhiteSpace(_opts.ResumeTaskId))
+            _tracker = TaskTracker.Load(_opts.ResumeTaskId);
 
         if (_mcp is not null && !_mcp.Tools.Any())
         {
@@ -102,6 +107,7 @@ public sealed class CodingAgent : IDisposable
             {
                 if (finishReason == "stop")
                 {
+                    _tracker?.Finalize("complete", "Task completed.");
                     await _observer.OnDone("Task complete.");
                     await MemoryStore.SaveAsync(memoryFile, messages);
                     return;
@@ -120,6 +126,11 @@ public sealed class CodingAgent : IDisposable
                 var argsRaw = tc["function"]?["arguments"]?.GetValue<string>() ?? "{}";
 
                 await _observer.OnToolCall(funcName, JsonHelpers.PrettyJson(argsRaw));
+
+                // Enforce task tracking: create the folder on the first real tool dispatch.
+                // Conversational replies and questions that never call a tool stay untracked.
+                if (_tracker is null && !_opts.DryRun)
+                    _tracker = CreateTracker(messages);
 
                 string result;
                 if (_opts.DryRun)
@@ -147,13 +158,64 @@ public sealed class CodingAgent : IDisposable
 
                 await _observer.OnToolResult(result, isError);
                 messages.Add(JsonHelpers.ToolResult(callId, result));
+
+                _tracker?.LogStep(isError ? "failed" : "done", $"{funcName}: {Truncate(result)}");
             }
 
             await MemoryStore.SaveAsync(memoryFile, messages);
             JsonHelpers.TrimHistory(messages);
         }
 
+        _tracker?.Finalize("incomplete", $"Reached maximum of {_opts.MaxSteps} steps without completing.");
         await _observer.OnError($"Reached maximum of {_opts.MaxSteps} steps without completing.");
+    }
+
+    private TaskTracker CreateTracker(JsonArray messages)
+    {
+        var goal = LastUserMessage(messages);
+        var slug = SlugFromGoal(goal);
+        return TaskTracker.Create(slug, goal);
+    }
+
+    private static string LastUserMessage(JsonArray messages)
+    {
+        for (int i = messages.Count - 1; i >= 0; i--)
+        {
+            var role = messages[i]?["role"]?.GetValue<string>();
+            if (role != "user") continue;
+
+            var content = messages[i]?["content"];
+            if (content is JsonValue v) return v.GetValue<string>();
+            if (content is JsonArray blocks)
+            {
+                foreach (var block in blocks)
+                    if (block?["type"]?.GetValue<string>() == "text")
+                        return block["text"]?.GetValue<string>() ?? "";
+            }
+        }
+        return "Untitled task";
+    }
+
+    private static string SlugFromGoal(string goal)
+    {
+        var words = goal.Split(new[] { ' ', '\t', '\n', '\r', ',', '.', ':', ';', '(', ')', '[', ']', '{', '}', '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+        var sb = new System.Text.StringBuilder();
+        foreach (var w in words)
+        {
+            var clean = new string(w.Where(char.IsLetterOrDigit).ToArray());
+            if (clean.Length == 0) continue;
+            if (sb.Length > 0) sb.Append('-');
+            sb.Append(clean.ToLowerInvariant());
+            if (sb.Length >= 40) break;
+        }
+        return sb.Length == 0 ? "task" : sb.ToString();
+    }
+
+    private static string Truncate(string s, int max = 200)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        var single = s.Replace("\r", " ").Replace("\n", " ");
+        return single.Length <= max ? single : single.Substring(0, max) + "...";
     }
 
     private static JsonArray MergeToolDefinitions(JsonArray native, JsonArray mcp)

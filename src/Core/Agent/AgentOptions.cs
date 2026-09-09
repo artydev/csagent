@@ -4,4 +4,5 @@ public sealed record AgentOptions(
     int MaxSteps = 30,
     bool DryRun = false,
     bool Confirm = true,
-    RetryPolicy? Retry = null);
+    RetryPolicy? Retry = null,
+    string? ResumeTaskId = null);
