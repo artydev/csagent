@@ -146,6 +146,11 @@ public static class ToolDispatcher
 
                 "list_models" => await ListModelsAsync(),
 
+                "read_clipboard" => await ReadClipboardAsync(isWindows),
+
+                "write_clipboard" => await WriteClipboardAsync(
+                    args["content"]!.GetValue<string>(), isWindows),
+
                 _ => $"Error: Unknown tool '{name}'"
             };
         }
@@ -159,7 +164,7 @@ public static class ToolDispatcher
     /// Returns true if the tool name is considered destructive (requires user confirmation).
     /// </summary>
     public static bool IsDestructive(string name) =>
-        name is "write_file" or "edit_file" or "git_commit" or "move_file" or "delete_file" or "unzip";
+        name is "write_file" or "edit_file" or "git_commit" or "move_file" or "delete_file" or "unzip" or "write_clipboard";
 
     /// <summary>
     /// The JSON tool definitions for the LLM API.
@@ -560,6 +565,35 @@ public static class ToolDispatcher
                 "type": "object",
                 "properties": {},
                 "required": []
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "read_clipboard",
+              "description": "Read the current text content of the system clipboard. Use this when the user asks to read, analyse, fix, complete, or act on whatever is currently in the clipboard.",
+              "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "write_clipboard",
+              "description": "Write text to the system clipboard, replacing its current content. Use this to send corrected, completed, or generated code/text back to the clipboard so the user can paste it. Destructive — requires confirmation.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "description": "The text to place in the clipboard."
+                  }
+                },
+                "required": ["content"]
               }
             }
           }
@@ -1844,6 +1878,153 @@ public static class ToolDispatcher
         catch (Exception ex)
         {
             return $"Error: list_models — {ex.Message}";
+        }
+    }
+
+    // ── read_clipboard / write_clipboard ────────────────────────────────────────
+
+    /// <summary>
+    /// Reads the system clipboard using the appropriate platform command.
+    /// AOT-safe: shells out to native clipboard tools, no P/Invoke, no NuGet.
+    ///
+    /// Platform commands:
+    ///   Windows : powershell Get-Clipboard -Raw
+    ///   macOS   : pbpaste
+    ///   Linux   : xclip -selection clipboard -o
+    ///             (falls back to xsel -b -o, then wl-paste for Wayland)
+    /// </summary>
+    private static async Task<string> ReadClipboardAsync(bool isWindows)
+    {
+        foreach (var (file, argList) in GetClipboardReadCandidates(isWindows))
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = file,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+                foreach (var a in argList) psi.ArgumentList.Add(a);
+
+                using var proc = new Process { StartInfo = psi };
+                proc.Start();
+
+                var output = await proc.StandardOutput.ReadToEndAsync();
+                await proc.WaitForExitAsync();
+
+                if (proc.ExitCode != 0) continue;
+
+                var text = output.TrimEnd('\r', '\n');
+                return string.IsNullOrEmpty(text)
+                    ? "Clipboard is empty."
+                    : $"Clipboard content:\n\n{text}";
+            }
+            catch (Exception) { /* tool not available, try next */ }
+        }
+
+        return "Error: read_clipboard — no clipboard tool available. " +
+               "On Linux, install xclip (apt install xclip) or xsel, " +
+               "or use a Wayland session with wl-clipboard.";
+    }
+
+    /// <summary>
+    /// Writes text to the system clipboard using the appropriate platform command.
+    /// Content is always passed via stdin to avoid any command-line quoting issues.
+    /// AOT-safe: shells out to native clipboard tools, no P/Invoke, no NuGet.
+    ///
+    /// Platform commands:
+    ///   Windows : powershell Set-Clipboard (via stdin pipeline)
+    ///   macOS   : pbcopy
+    ///   Linux   : xclip -selection clipboard
+    ///             (falls back to xsel -b -i, then wl-copy for Wayland)
+    /// </summary>
+    private static async Task<string> WriteClipboardAsync(string clipContent, bool isWindows)
+    {
+        if (clipContent.Length > 1_000_000)
+            return "Error: write_clipboard — content exceeds 1 MB limit.";
+
+        foreach (var (file, argList) in GetClipboardWriteCandidates(isWindows))
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = file,
+                    RedirectStandardInput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+                foreach (var a in argList) psi.ArgumentList.Add(a);
+
+                using var proc = new Process { StartInfo = psi };
+                proc.Start();
+
+                await proc.StandardInput.WriteAsync(clipContent);
+                proc.StandardInput.Close();
+                await proc.WaitForExitAsync();
+
+                if (proc.ExitCode != 0) continue;
+
+                return $"OK: {clipContent.Length} character(s) written to clipboard.";
+            }
+            catch (Exception) { /* tool not available, try next */ }
+        }
+
+        return "Error: write_clipboard — no clipboard tool available. " +
+               "On Linux, install xclip (apt install xclip) or xsel, " +
+               "or use a Wayland session with wl-clipboard.";
+    }
+
+    /// <summary>
+    /// Returns platform-ordered read candidates as (executable, argumentList) pairs.
+    /// Using ArgumentList avoids all shell quoting issues — each element is passed
+    /// verbatim to the OS without any escaping.
+    /// </summary>
+    private static IEnumerable<(string File, string[] Args)> GetClipboardReadCandidates(bool isWindows)
+    {
+        if (isWindows)
+        {
+            // -Command with separate ArgumentList entries: no inner-quote escaping needed
+            yield return ("powershell", ["-NoProfile", "-NonInteractive", "-Command", "Get-Clipboard -Raw"]);
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            yield return ("pbpaste", []);
+        }
+        else
+        {
+            // Linux: try X11 tools then Wayland
+            yield return ("xclip", ["-selection", "clipboard", "-o"]);
+            yield return ("xsel", ["-b", "-o"]);
+            yield return ("wl-paste", []);
+        }
+    }
+
+    /// <summary>
+    /// Returns platform-ordered write candidates as (executable, argumentList) pairs.
+    /// Content is always piped via stdin — no quoting of the content itself is needed.
+    /// </summary>
+    private static IEnumerable<(string File, string[] Args)> GetClipboardWriteCandidates(bool isWindows)
+    {
+        if (isWindows)
+        {
+            // $input is the PowerShell automatic variable for stdin pipeline input
+            yield return ("powershell", ["-NoProfile", "-NonInteractive", "-Command", "$input | Set-Clipboard"]);
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            yield return ("pbcopy", []);
+        }
+        else
+        {
+            // Linux: try X11 tools then Wayland
+            yield return ("xclip", ["-selection", "clipboard"]);
+            yield return ("xsel", ["-b", "-i"]);
+            yield return ("wl-copy", []);
         }
     }
 

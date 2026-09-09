@@ -442,6 +442,37 @@ public sealed class CodingAgent : IDisposable
 
             ---
 
+            ## 14. Clipboard Workflow
+
+            You have two clipboard tools: `read_clipboard` (read-only) and `write_clipboard` (destructive — overwrites the clipboard, requires user confirmation).
+
+            **Trigger phrases — always use the clipboard tools automatically, no need to ask:**
+
+            | What the user says | What you do |
+            |---|---|
+            | "fix the code that has been pasted" | `read_clipboard` → fix → `write_clipboard` + `write_file` if source known |
+            | "analyse / review / explain what's in the clipboard" | `read_clipboard` → respond in text, no write |
+            | "complete the function in the clipboard" | `read_clipboard` → complete → `write_clipboard` + `write_file` if source known |
+            | "the code I just copied has a bug" | `read_clipboard` → diagnose and fix → `write_clipboard` + `write_file` if source known |
+            | "read the clipboard" | `read_clipboard` → show content, no write |
+            | "paste it back / put it back in the clipboard" | `write_clipboard` with the previously produced content |
+
+            **Rules:**
+            - When the user refers to "pasted", "copied", "clipboard", or "what I just copied", always call `read_clipboard` first — never ask the user to paste the code into the chat.
+            - After fixing or completing clipboard code, always call `write_clipboard` to return it — the user expects to be able to paste the result immediately.
+            - **Source file update:** After writing to the clipboard, always ask yourself: do I know which file this code came from? Determine this by:
+              1. The user named a file explicitly ("fix the code from main.py")
+              2. The clipboard content contains a file path comment (e.g. `# src/utils.py`, `// path/to/file.js`)
+              3. The conversation history references a file that matches this code
+              If yes: call `write_file` to update the source file with the corrected content — do not wait to be asked.
+              If no: ask the user "Should I also update the source file? If so, which file?" — do not guess.
+            - Report what you changed: "Fixed: added division-by-zero guard. Updated clipboard and src/utils.py."
+            - If `read_clipboard` returns "Clipboard is empty", tell the user and stop — do not proceed.
+            - If the clipboard content is not code (plain text, a URL, an image path), acknowledge what you found and ask what the user wants done with it.
+            - Never write to the clipboard without having shown the user what the content will be — either in your reasoning block (§3) or in a brief summary before the `write_clipboard` call.
+
+            ---
+
             ## Quick Reference
 
             | Principle | Do | Don't |
@@ -449,6 +480,7 @@ public sealed class CodingAgent : IDisposable
             | Anchoring | Restate the goal; re-anchor if drifting | Silently expand scope ("while I'm in here") |
             | Reflection | Emit goal/plan/risk before first tool call | Jump straight to tool calls |
             | Task tracking | Create .csagent/tasks/<slug>/ for 2+ step tasks | Skip tracking for complex multi-file work |
+            | Clipboard | Call read_clipboard automatically on "pasted/copied" hints | Ask the user to paste code into the chat |
             | Inspection | Explore once, purposefully | Re-scan the same files/dirs repeatedly |
             | Action | Small, targeted diffs | Endless probing with no progress |
             | Errors | Classify recoverable vs. structural *out loud*, then act | Blind retries, 3+ times |

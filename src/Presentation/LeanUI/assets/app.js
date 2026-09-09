@@ -50,7 +50,9 @@ const TOOL_LABELS = {
     search_files: "🔍 Search Files",
     sh: "💻 Shell Command",
     switch_model: "🔄 Switch Model",
-    list_models: "🤖 List Models"
+    list_models: "🤖 List Models",
+    read_clipboard: "📋 Read Clipboard",
+    write_clipboard: "📋 Write Clipboard"
 };
 
 /* ──────────────────────────────────────────────────────────────
