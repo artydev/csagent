@@ -4,9 +4,7 @@ using CsAgentUI.Shared;
 
 namespace CsAgentUI.Presentation.Web;
 
-/// <summary>
-/// Web UI host — starts an ASP.NET server with SSE-based chat.
-/// </summary>
+/// <summary>Web UI host — starts an ASP.NET server with SSE-based chat.</summary>
 public static class WebHost
 {
     public static void Run(AgentArguments args)
@@ -20,7 +18,10 @@ public static class WebHost
         app.MapGet("/app.js", () => Results.Content(StaticAssets.JsUI, "application/javascript"));
         app.MapGet("/styles.css", () => Results.Content(StaticAssets.CssUI, "text/css"));
 
-        app.MapEndpoints(args.MemoryFile, args.ModelOverride, args.McpUrl, new RetryPolicy(args.MaxRetries, args.RetryDelayMs));
+        app.MapEndpoints(
+            args.MemoryFile, args.ModelOverride, args.McpUrl,
+            new RetryPolicy(args.MaxRetries, args.RetryDelayMs),
+            args.TaskSlug);
 
         var url = $"http://localhost:{args.Port}";
 
@@ -29,10 +30,7 @@ public static class WebHost
             Console.WriteLine($"\n--- Server started at {url} ---");
             if (!string.IsNullOrWhiteSpace(args.McpUrl))
                 Console.WriteLine($"--- MCP endpoint: {args.McpUrl} ---");
-            try
-            {
-                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-            }
+            try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
             catch { }
         });
 

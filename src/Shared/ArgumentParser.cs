@@ -7,6 +7,7 @@ public sealed record AgentArguments(
     string MemoryFile,
     string? ModelOverride,
     string? McpUrl,
+    string? TaskSlug,
     int Port,
     bool IsUiMode,
     bool IsLeanUiMode,
@@ -35,12 +36,15 @@ public static class ArgumentParser
         var memFile = GetMemoryFile(args);
         var modelOverride = GetModelOverride(args);
         var mcpUrl = GetValue(args, "--mcp", "--mcp-url")
-                     ?? Environment.GetEnvironmentVariable("CSAGENT_MCP_URL");
+                           ?? Environment.GetEnvironmentVariable("CSAGENT_MCP_URL");
+        var taskSlug = GetValue(args, "--task");
         var port = GetPort(args);
         var maxRetries = GetInt(args, "--max-retries", RetryPolicy.Default.MaxAttempts);
         var retryDelayMs = GetInt(args, "--retry-delay", RetryPolicy.Default.BaseDelayMs);
 
-        return new AgentArguments(memFile, modelOverride, mcpUrl, port, isUiMode, isLeanUiMode, isNativeMode, isDryRun, showHelp, showVersion, showDoc, maxRetries, retryDelayMs);
+        return new AgentArguments(memFile, modelOverride, mcpUrl, taskSlug,
+            port, isUiMode, isLeanUiMode, isNativeMode, isDryRun,
+            showHelp, showVersion, showDoc, maxRetries, retryDelayMs);
     }
 
     private static string GetMemoryFile(string[] args)
@@ -50,16 +54,15 @@ public static class ArgumentParser
 
         for (int i = 0; i < args.Length; i++)
         {
-            if (args[i] is "--model" or "--mcp" or "--mcp-url" or "--port" or "-p" or "--max-retries" or "--retry-delay")
-            {
-                i++;
-                continue;
-            }
+            if (args[i] is "--model" or "--mcp" or "--mcp-url" or "--port"
+                          or "-p" or "--max-retries" or "--retry-delay"
+                          or "--task")
+            { i++; continue; }
 
-            if (args[i] != "--ui" && args[i] != "--leanui" && args[i] != "--native" && args[i] != "--dry-run" && !args[i].StartsWith("-"))
+            if (args[i] != "--ui" && args[i] != "--leanui" && args[i] != "--native"
+                && args[i] != "--dry-run" && !args[i].StartsWith("-"))
                 return args[i];
         }
-
         return "agent_memory.json";
     }
 
@@ -77,17 +80,12 @@ public static class ArgumentParser
     {
         for (int i = 0; i < args.Length; i++)
             if ((args[i] == "--port" || args[i] == "-p") && i + 1 < args.Length)
-            {
                 if (int.TryParse(args[i + 1], out var p) && p > 0 && p < 65536)
                     return p;
-            }
         return 5050;
     }
 
-    /// <summary>
-    /// Reads an integer-valued option, falling back to <paramref name="defaultValue"/>
-    /// when the flag is absent or its value is not a positive integer.
-    /// </summary>
+    /// <summary>Reads an integer-valued option, falling back to defaultValue.</summary>
     private static int GetInt(string[] args, string name, int defaultValue)
     {
         for (int i = 0; i < args.Length - 1; i++)

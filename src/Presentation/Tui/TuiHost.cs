@@ -1,10 +1,8 @@
+using CsAgentUI.Core.Tasks;
 using CsAgentUI.Shared;
 
 namespace CsAgentUI.Presentation.Tui;
 
-/// <summary>
-/// Terminal UI host — interactive CLI session.
-/// </summary>
 public static class TuiHost
 {
     public static async Task RunAsync(AgentArguments args)
@@ -28,6 +26,8 @@ public static class TuiHost
             Console.WriteLine($"  MCP: {args.McpUrl}");
         if (args.IsDryRun)
             Console.WriteLine("  Dry-run: ON (no changes will be made)");
+        if (!string.IsNullOrWhiteSpace(args.TaskSlug))
+            Console.WriteLine($"  Task: {args.TaskSlug}");
         Console.WriteLine();
 
         while (true)
@@ -39,20 +39,25 @@ public static class TuiHost
 
             messages.Add(JsonHelpers.Message("user", input));
 
-            // Re-evaluate the model on every turn: if the history contains image_url
-            // blocks from a previous vision exchange, we must keep using the vision
-            // model — text-only models reject requests whose history has image content.
             var model = args.ModelOverride
                         ?? (JsonHelpers.HistoryContainsImage(messages)
                                 ? LlmSettings.VisionModel
                                 : LlmSettings.Model);
             Console.WriteLine($"  [model: {model}]");
 
+            // Task tracking is user-initiated: create the folder now, before the
+            // agent runs, only when the user explicitly passed --task <slug>.
+            TaskTracker? tracker = null;
+            if (!string.IsNullOrWhiteSpace(args.TaskSlug) && !args.IsDryRun)
+                tracker = TaskTracker.Create(args.TaskSlug, input);
+
             using var agent = new CodingAgent(
-                apiKey,
-                LlmSettings.Endpoint,
-                model,
-                new AgentOptions(Confirm: true, DryRun: args.IsDryRun, Retry: new RetryPolicy(args.MaxRetries, args.RetryDelayMs)),
+                apiKey, LlmSettings.Endpoint, model,
+                new AgentOptions(
+                    Confirm: true,
+                    DryRun: args.IsDryRun,
+                    Retry: new RetryPolicy(args.MaxRetries, args.RetryDelayMs),
+                    Tracker: tracker),
                 new ConsoleObserver(),
                 args.McpUrl);
 

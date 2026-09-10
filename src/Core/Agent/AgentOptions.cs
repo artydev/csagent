@@ -1,3 +1,5 @@
+using CsAgentUI.Core.Tasks;
+
 namespace CsAgentUI;
 
 public sealed record AgentOptions(
@@ -5,4 +7,5 @@ public sealed record AgentOptions(
     bool DryRun = false,
     bool Confirm = true,
     RetryPolicy? Retry = null,
-    string? ResumeTaskId = null);
+    string? ResumeTaskId = null,
+    TaskTracker? Tracker = null);
