@@ -436,12 +436,13 @@ public static partial class ToolDispatcher
             "type": "function",
             "function": {
               "name": "start_excel",
-              "description": "Launch Microsoft Excel and control it via COM. Optionally create a workbook with sample data and save it to the given path. Windows only.",
+              "description": "Launch Microsoft Excel and control it via COM. Reuses an already-running Excel instance if one exists, otherwise starts a new one. A new blank workbook is always added. If 'data' is provided (a 2D array of cell values), it is written into that workbook starting at A1; no sample/placeholder data is ever inserted. If 'path' is provided, the workbook is saved there (DESTRUCTIVE: an existing file at that path is silently overwritten, so this requires confirmation). If 'path' is omitted, the workbook is left open, unsaved. Windows only.",
               "parameters": {
                 "type": "object",
                 "properties": {
                   "path":    { "type": "string",  "description": "Optional path to save a new workbook to (e.g. 'output.xlsx'). If omitted, Excel opens with a blank workbook." },
-                  "visible": { "type": "boolean", "description": "Whether the Excel window should be visible. Defaults to true." }
+                  "visible": { "type": "boolean", "description": "Whether a newly-created Excel window should be visible. Defaults to true. Only applied when a new instance is started; an existing interactive session is never forced hidden or shown." },
+                  "data":    { "type": "array", "description": "Optional 2D array of cell values (rows of columns) to write into the new workbook starting at A1. Each element may be a string, number, or boolean; null cells are left untouched.", "items": { "type": "array", "items": {} } }
                 },
                 "required": []
               }

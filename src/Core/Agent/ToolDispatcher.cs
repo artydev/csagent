@@ -143,6 +143,7 @@ public static partial class ToolDispatcher
                 "start_excel" => await StartExcelAsync(
                     args["path"]?.GetValue<string>(),
                     args["visible"]?.GetValue<bool>() ?? true,
+                    args["data"] as JsonArray,
                     isWindows),
 
                 _ => $"Error: Unknown tool '{name}'"
