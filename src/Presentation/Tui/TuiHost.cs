@@ -1,11 +1,12 @@
 using CsAgentUI.Core.Tasks;
+using CsAgentUI.Infrastructure.Clipboard;
 using CsAgentUI.Shared;
 
 namespace CsAgentUI.Presentation.Tui;
 
 public static class TuiHost
 {
-    public static async Task RunAsync(AgentArguments args)
+    public static async Task RunAsync(AgentArguments args, WindowsClipboardMonitor clipboard)
     {
         UI.Banner();
         Console.WriteLine($"  CSAgent v{Program.Version}");
@@ -37,7 +38,16 @@ public static class TuiHost
             if (string.IsNullOrWhiteSpace(input)) continue;
             if (input.Trim().Equals("exit", StringComparison.OrdinalIgnoreCase)) break;
 
-            messages.Add(JsonHelpers.Message("user", input));
+            var image = clipboard.ConsumeLatest();
+            if (image is not null)
+            {
+                var b64 = Convert.ToBase64String(image.PngBytes);
+                messages.Add(JsonHelpers.MultimodalMessage("user", input, b64, "image/png"));
+            }
+            else
+            {
+                messages.Add(JsonHelpers.Message("user", input));
+            }
 
             var model = args.ModelOverride
                         ?? (JsonHelpers.HistoryContainsImage(messages)
@@ -45,8 +55,6 @@ public static class TuiHost
                                 : LlmSettings.Model);
             Console.WriteLine($"  [model: {model}]");
 
-            // Task tracking is user-initiated: create the folder now, before the
-            // agent runs, only when the user explicitly passed --task <slug>.
             TaskTracker? tracker = null;
             if (!string.IsNullOrWhiteSpace(args.TaskSlug) && !args.IsDryRun)
                 tracker = TaskTracker.Create(args.TaskSlug, input);

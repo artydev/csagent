@@ -1,5 +1,6 @@
 using CsAgentUI;
 using CsAgentUI.Core.Tasks;
+using CsAgentUI.Infrastructure.Clipboard;
 using CsAgentUI.Shared;
 
 namespace CsAgentUI.Endpoints;
@@ -14,14 +15,15 @@ public static class ApiEndpoints
         string? modelOverride = null,
         string? mcpUrl = null,
         RetryPolicy? retry = null,
-        string? taskSlug = null)
+        string? taskSlug = null,
+        WindowsClipboardMonitor? clipboard = null)
     {
         var broker = new ConfirmationBroker();
 
         app.MapPost("/api/confirm", async (HttpContext ctx) =>
         {
             using var sr = new StreamReader(ctx.Request.Body);
-            var body = await sr.ReadToEndAsync();
+            var body  = await sr.ReadToEndAsync();
             var allow = body.Trim().Equals("true", StringComparison.OrdinalIgnoreCase);
             var resolved = broker.Resolve(allow);
             ctx.Response.StatusCode = resolved ? 200 : 409;
@@ -30,7 +32,6 @@ public static class ApiEndpoints
 
         app.MapGet("/api/chat", async (HttpContext ctx, string prompt) =>
         {
-            // Task slug from ?task= query param, fallback to server-level slug
             var slug = ctx.Request.Query["task"].ToString();
             if (string.IsNullOrWhiteSpace(slug)) slug = taskSlug;
 
@@ -52,22 +53,34 @@ public static class ApiEndpoints
             if (string.IsNullOrWhiteSpace(prompt))
             { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsync("Missing 'prompt' field"); return; }
 
-            // Task slug from form field, fallback to server-level slug
             var slug = form["task"].ToString();
             if (string.IsNullOrWhiteSpace(slug)) slug = taskSlug;
 
             string? imageBase64 = null, imageMime = null;
+
             var file = form.Files.GetFile("image");
             if (file is { Length: > 0 })
             {
                 if (file.Length > MaxImageBytes)
                 { ctx.Response.StatusCode = 413; await ctx.Response.WriteAsync($"Image too large (max {MaxImageBytes / 1024 / 1024} MB)"); return; }
+
                 imageMime = ResolveMimeType(file.FileName, file.ContentType);
                 if (!IsSupportedImageMime(imageMime))
                 { ctx.Response.StatusCode = 415; await ctx.Response.WriteAsync($"Unsupported image type: {imageMime}"); return; }
+
                 using var ms = new MemoryStream((int)file.Length);
                 await file.CopyToAsync(ms);
                 imageBase64 = Convert.ToBase64String(ms.ToArray());
+            }
+            else
+            {
+                // No explicit upload — check if a screenshot is waiting on the clipboard.
+                var clipped = clipboard?.ConsumeLatest();
+                if (clipped is not null)
+                {
+                    imageBase64 = Convert.ToBase64String(clipped.PngBytes);
+                    imageMime   = "image/png";
+                }
             }
 
             await RunChatAsync(ctx, prompt, imageBase64, imageMime,
@@ -89,7 +102,7 @@ public static class ApiEndpoints
         ConfirmationBroker broker,
         string? taskSlug)
     {
-        ctx.Response.Headers.ContentType = "text/event-stream";
+        ctx.Response.Headers.ContentType  = "text/event-stream";
         ctx.Response.Headers.CacheControl = "no-cache";
 
         var observer = new SseObserver(ctx.Response, broker);
@@ -110,8 +123,6 @@ public static class ApiEndpoints
         var needsVision = imageBase64 is not null || JsonHelpers.HistoryContainsImage(msgs);
         var model = modelOverride ?? (needsVision ? LlmSettings.VisionModel : LlmSettings.Model);
 
-        // Task tracking is user-initiated: create the folder now, before the
-        // agent runs, only when the user explicitly requested it.
         TaskTracker? tracker = null;
         if (!string.IsNullOrWhiteSpace(taskSlug))
             tracker = TaskTracker.Create(taskSlug, prompt);
@@ -130,12 +141,12 @@ public static class ApiEndpoints
         return ext switch
         {
             ".jpg" or ".jpeg" => "image/jpeg",
-            ".png" => "image/png",
-            ".gif" => "image/gif",
-            ".webp" => "image/webp",
+            ".png"            => "image/png",
+            ".gif"            => "image/gif",
+            ".webp"           => "image/webp",
             _ => string.IsNullOrWhiteSpace(browserContentType)
-                                    ? "application/octet-stream"
-                                    : browserContentType
+                    ? "application/octet-stream"
+                    : browserContentType
         };
     }
 
