@@ -422,6 +422,13 @@ public sealed class CodingAgent : IDisposable
             - **Source file update:** After writing to the clipboard, if you know the source file (user named it, comment in clipboard, or conversation history), call `write_file` to update it automatically. If unknown, ask: "Should I also update the source file? If so, which file?"
 
             ---
+            
+            
+            ## 15. Automation
+            
+            Open Excel using 'excel_command'; if any non linked Excel exist kill it;
+            
+            __
 
             ## Quick Reference
 
