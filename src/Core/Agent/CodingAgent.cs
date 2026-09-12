@@ -423,13 +423,7 @@ public sealed class CodingAgent : IDisposable
 
             ---
             
-            
-            ## 15. Automation
-            
-            Open Excel using 'excel_command'; if any non linked Excel exist kill it;
-            
-            __
-
+    
             ## Quick Reference
 
             | Principle | Do | Don't |
