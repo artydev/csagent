@@ -432,20 +432,35 @@ public static partial class ToolDispatcher
               }
             }
           },
+          
           {
-            "type": "function",
-            "function": {
-              "name": "start_excel",
-              "description": "Launch Microsoft Excel and control it via COM. Reuses an already-running Excel instance if one exists, otherwise starts a new one. A new blank workbook is always added. If 'data' is provided (a 2D array of cell values), it is written into that workbook starting at A1; no sample/placeholder data is ever inserted. If 'path' is provided, the workbook is saved there (DESTRUCTIVE: an existing file at that path is silently overwritten, so this requires confirmation). If 'path' is omitted, the workbook is left open, unsaved. Windows only.",
-              "parameters": {
-                "type": "object",
-                "properties": {
-                  "path":    { "type": "string",  "description": "Optional path to save a new workbook to (e.g. 'output.xlsx'). If omitted, Excel opens with a blank workbook." },
-                  "visible": { "type": "boolean", "description": "Whether a newly-created Excel window should be visible. Defaults to true. Only applied when a new instance is started; an existing interactive session is never forced hidden or shown." },
-                  "data":    { "type": "array", "description": "Optional 2D array of cell values (rows of columns) to write into the new workbook starting at A1. Each element may be a string, number, or boolean; null cells are left untouched.", "items": { "type": "array", "items": {} } }
-                },
-                "required": []
-              }
+          "type": "function",
+          "function": {
+            "name": "excel_command",
+            "description": "Run a PowerShell command against a live, persistent Excel automation session. Windows only. The first call in a session launches Excel via COM (reusing an already-running instance if one exists) and prepares $excel (the Application), $wb (a workbook), and $ws (its first worksheet) — these variables remain available in every subsequent call to the same session, so multi-step interaction (set values, apply formulas, format cells, add charts, save) works naturally across many calls without losing state. The command runs as raw PowerShell, so it can reference and mutate $excel/$wb/$ws directly, e.g. \"$ws.Cells.Item(1,1) = 'Hello'\" or \"$wb.SaveAs('C:\\\\path\\\\out.xlsx')\". Use close_excel when done with a session.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command":   { "type": "string",  "description": "A PowerShell command or statement to run in this session, typically referencing $excel, $wb, and/or $ws." },
+                "session":   { "type": "string",  "description": "Optional session id. Defaults to 'default'. Use distinct ids for independent, concurrent Excel sessions." },
+                "timeoutMs": { "type": "integer", "description": "Timeout in milliseconds to wait for the command's output. Defaults to 60000, max 300000." }
+              },
+              "required": ["command"]
+            }
+          }
+        },
+          
+        {
+          "type": "function",
+          "function": {
+            "name": "close_excel",
+            "description": "Close a persistent Excel automation session created by excel_command, releasing its PowerShell driver process. Excel itself is left running (it was placed in user-controlled mode), so any open workbook stays visible and usable — this only ends the automation connection, not the application.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "session": { "type": "string", "description": "Optional session id to close. Defaults to 'default'." }
+              },
+              "required": []
             }
           }
         ]

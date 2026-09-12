@@ -140,11 +140,14 @@ public static partial class ToolDispatcher
                 "write_clipboard" => await WriteClipboardAsync(
                     args["content"]!.GetValue<string>(), isWindows),
 
-                "start_excel" => await StartExcelAsync(
-                    args["path"]?.GetValue<string>(),
-                    args["visible"]?.GetValue<bool>() ?? true,
-                    args["data"] as JsonArray,
-                    isWindows),
+                "excel_command" => await ExcelCommandAsync(
+                     args["command"]!.GetValue<string>(),
+                     args["session"]?.GetValue<string>() ?? "default",
+                     args["timeoutMs"]?.GetValue<int>() ?? 60_000,
+                     isWindows),
+
+                "close_excel" => CloseExcel(
+                    args["session"]?.GetValue<string>() ?? "default"),
 
                 _ => $"Error: Unknown tool '{name}'"
             };
