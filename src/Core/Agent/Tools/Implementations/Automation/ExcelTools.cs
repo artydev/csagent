@@ -10,13 +10,14 @@ public static partial class ToolDispatcher
     // Live, interactive Excel automation. Unlike a one-shot script, this keeps
     // a single persistent powershell.exe process per session alive across
     // multiple tool calls, with $excel / $wb / $ws surviving between calls —
-    // exactly the same pattern as run_terminal's TerminalSession, just with
-    // an Excel COM bootstrap sent once at session start.
+    // exactly the same pattern as run_terminal's TerminalSession.
     //
-    // Because the driver process never exits between commands, Excel's
-    // UserControl flag isn't even load-bearing here (there's no premature
-    // disconnect to trigger it) — it's still set for correctness/safety in
-    // case the LLM independently detaches, and so Excel survives session close.
+    // UserControl is genuinely load-bearing: restarting csagent.exe spawns a
+    // fresh PowerShell process with no memory of the previous one, so Excel
+    // (kept alive only via UserControl) must survive that disconnect on its
+    // own. HealthCheckAndRepair() then re-attaches and reuses whatever
+    // workbook is already active, rather than piling up a new blank one on
+    // every restart.
 
     private static readonly Dictionary<string, ExcelSession> ExcelSessions = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object ExcelLock = new();
@@ -71,11 +72,13 @@ public static partial class ToolDispatcher
     }
 
     /// <summary>
-    /// A persistent, interactive PowerShell process with Excel COM bootstrapped
-    /// once at first use. $excel / $wb / $ws remain valid across every
-    /// subsequent excel_command call in this session, since it's the same
-    /// living process the whole time — no re-attach, no GetActiveObject
-    /// guessing on each call.
+    /// A persistent, interactive PowerShell process driving Excel via COM.
+    /// $excel / $wb / $ws live inside this process's memory and remain valid
+    /// across every excel_command call routed to this session — no re-attach
+    /// needed between calls, since it's the same living process the whole
+    /// time. HealthCheckAndRepair() runs before every command to detect and
+    /// transparently recover from a dropped COM link, and to reattach to
+    /// whichever workbook is already active rather than creating a new one.
     /// </summary>
     private sealed class ExcelSession : IDisposable
     {
@@ -84,7 +87,6 @@ public static partial class ToolDispatcher
         private readonly StringBuilder _output = new();
         private readonly object _lock = new();
         private bool _disposed;
-        private bool _bootstrapped;
 
         public ExcelSession(string id)
         {
@@ -93,7 +95,7 @@ public static partial class ToolDispatcher
             var psi = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
-                Arguments = "-NoProfile -NoLogo",
+                Arguments = "-NoProfile -NoLogo -NonInteractive",
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -127,13 +129,27 @@ public static partial class ToolDispatcher
             if (_disposed || _proc.HasExited)
                 return $"Error: excel_command - session '{_id}' is no longer running. Send another command to start a new one.";
 
-            var toSend = _bootstrapped ? command : Bootstrap() + "\n" + command;
+            var toSend = HealthCheckAndRepair() + "; " + command;
+
+            // Base64-encode the whole thing and decode+run it atomically via
+            // Invoke-Expression on ONE physical stdin line. This matters
+            // because 'command' may itself contain embedded newlines (a
+            // multi-line array literal, a for-loop) — sending that text
+            // directly would arrive at the child process as several
+            // separate physical lines, which -NonInteractive PowerShell
+            // parses through its interactive continuation-prompt logic
+            // (visible as '>>' in raw output). That path has proven
+            // unreliable for reliably executing loop bodies against COM
+            // objects: no error surfaces, but writes silently don't land.
+            // Invoke-Expression runs in the current scope, so $excel/$wb/$ws
+            // set here are still visible to later calls, same as before.
+            var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(toSend));
 
             int startPos;
             lock (_lock) { startPos = _output.Length; }
 
             var marker = $"__CSAGENT_EXCEL_DONE_{Guid.NewGuid():N}__";
-            var line = $"{toSend}; Write-Output '{marker}'";
+            var line = $"$__csagentCmd = [System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String('{encoded}')); Invoke-Expression $__csagentCmd; Write-Output '{marker}'";
 
             await _proc.StandardInput.WriteLineAsync(line);
             await _proc.StandardInput.FlushAsync();
@@ -150,7 +166,6 @@ public static partial class ToolDispatcher
                     {
                         var newText = _output.ToString(startPos, _output.Length - startPos);
                         newText = newText.Replace(marker, "").Trim();
-                        _bootstrapped = true;
                         return string.IsNullOrWhiteSpace(newText)
                             ? $"OK (excel session '{_id}'): (no output)"
                             : $"OK (excel session '{_id}'):\n{newText}";
@@ -164,19 +179,37 @@ public static partial class ToolDispatcher
         }
 
         /// <summary>
-        /// PowerShell run once, at the start of the session: attach to an
-        /// already-running Excel if one exists, otherwise create one; then
-        /// ensure a workbook and worksheet reference are ready as $wb/$ws.
+        /// Runs before every user command: cheaply checks whether $excel is
+        /// still alive (a dropped/crashed COM link throws on property
+        /// access), and transparently repairs the session if not — either
+        /// re-attaching to a running Excel or starting a new one. Reuses the
+        /// existing active workbook/worksheet when one is already open
+        /// (important across csagent process restarts, since Excel itself —
+        /// kept alive via UserControl — survives even though a fresh
+        /// PowerShell process has no memory of $wb/$ws from before); only
+        /// creates a new blank workbook when none exist at all.
         /// </summary>
-        private static string Bootstrap() => string.Join("; ", new[]
+        private static string HealthCheckAndRepair() => string.Join("; ", new[]
         {
-            "$reused = $true",
-            "try { $excel = [Runtime.InteropServices.Marshal]::GetActiveObject('Excel.Application') } " +
-                "catch { $reused = $false; $excel = New-Object -ComObject Excel.Application }",
-            "if (-not $reused) { $excel.Visible = $true; $excel.UserControl = $true }",
-            "$excel.DisplayAlerts = $false",
-            "if (-not $wb) { $wb = $excel.Workbooks.Add() }",
-            "if (-not $ws) { $ws = $wb.Worksheets.Item(1) }"
+            "$needsBootstrap = $true",
+            "if ($excel) { try { $null = $excel.Visible; $needsBootstrap = $false } catch { $needsBootstrap = $true } }",
+            "if ($needsBootstrap) {" +
+                " $reused = $true;" +
+                " try { $excel = [Runtime.InteropServices.Marshal]::GetActiveObject('Excel.Application') }" +
+                " catch { $reused = $false; $excel = New-Object -ComObject Excel.Application };" +
+                " if (-not $reused) { $excel.UserControl = $true };" +
+                " $excel.Visible = $true;" +
+                " $excel.DisplayAlerts = $false;" +
+                " $excel.AskToUpdateLinks = $false;" +
+                " if ($excel.Workbooks.Count -gt 0) {" +
+                    " $wb = $excel.ActiveWorkbook;" +
+                    " if (-not $wb) { $wb = $excel.Workbooks.Item(1) }" +
+                " } else {" +
+                    " $wb = $excel.Workbooks.Add()" +
+                " };" +
+                " $ws = $wb.ActiveSheet;" +
+                " if (-not $ws) { $ws = $wb.Worksheets.Item(1) }" +
+            " }"
         });
 
         public void Dispose()
