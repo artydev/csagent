@@ -441,7 +441,7 @@ public static partial class ToolDispatcher
                 "type": "object",
                 "properties": {
                   "command":   { "type": "string",  "description": "A PowerShell command or statement to run in this session, typically referencing $excel, $wb, and/or $ws." },
-                  "session":   { "type": "string",  "description": "Optional session id. Defaults to 'default'. Use distinct ids for independent, concurrent Excel sessions." },
+                  "session":   { "type": "string",  "description": "Optional session id. Defaults to 'default'. IMPORTANT: reuse the SAME session id across every call that is part of one continuous task, so $excel/$wb/$ws carry over between steps — do not invent a new id per sub-step. Only use a distinct id when you genuinely want a second, independent Excel window running in parallel to the first." },
                   "timeoutMs": { "type": "integer", "description": "Timeout in milliseconds to wait for the command's output. Defaults to 60000, max 300000." }
                 },
                 "required": ["command"]
@@ -459,6 +459,28 @@ public static partial class ToolDispatcher
                   "session": { "type": "string", "description": "Optional session id to close. Defaults to 'default'." }
                 },
                 "required": []
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "send_email",
+              "description": "Compose an email via Microsoft Outlook COM automation and either display it as a draft for the user to review (default), save it to drafts, or send it immediately. Windows only, requires classic desktop Outlook installed and configured. Destructive — actually sending an email is irreversible, so this tool always requires user confirmation regardless of the 'send' value.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "to":           { "type": "string",  "description": "Recipient email address(es), semicolon-separated for multiple." },
+                  "cc":           { "type": "string",  "description": "Optional CC address(es), semicolon-separated." },
+                  "bcc":          { "type": "string",  "description": "Optional BCC address(es), semicolon-separated." },
+                  "subject":      { "type": "string",  "description": "Email subject line." },
+                  "body":         { "type": "string",  "description": "Plain-text body. Ignored if 'bodyHtml' is provided." },
+                  "bodyHtml":     { "type": "string",  "description": "HTML body, takes priority over 'body' if both are given." },
+                  "attachments":  { "type": "array",   "description": "Optional list of file paths to attach. Each must exist on disk; the request fails if any attachment is not found.", "items": { "type": "string" } },
+                  "send":         { "type": "boolean", "description": "If true, actually sends the email immediately (irreversible). Defaults to false." },
+                  "saveToDrafts": { "type": "boolean", "description": "If true (and 'send' is false), saves the email to Outlook drafts instead of just displaying it. Defaults to false." }
+                },
+                "required": ["to", "subject"]
               }
             }
           }

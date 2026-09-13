@@ -149,6 +149,19 @@ public static partial class ToolDispatcher
                 "close_excel" => CloseExcel(
                     args["session"]?.GetValue<string>() ?? "default"),
 
+
+                "send_email" => await SendEmailAsync(
+                   args["to"]!.GetValue<string>(),
+                   args["cc"]?.GetValue<string>(),
+                   args["bcc"]?.GetValue<string>(),
+                   args["subject"]!.GetValue<string>(),
+                   args["body"]?.GetValue<string>(),
+                   args["bodyHtml"]?.GetValue<string>(),
+                   args["attachments"] as JsonArray,
+                   args["send"]?.GetValue<bool>() ?? false,
+                   args["saveToDrafts"]?.GetValue<bool>() ?? false,
+                   isWindows),
+
                 _ => $"Error: Unknown tool '{name}'"
             };
         }
