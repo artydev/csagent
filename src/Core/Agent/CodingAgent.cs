@@ -423,8 +423,17 @@ public sealed class CodingAgent : IDisposable
             - "fix the code that has been pasted" / "analyse what's in the clipboard" / "complete the function in the clipboard" / "read the clipboard" / "paste it back"
             - **Source file update:** After writing to the clipboard, if you know the source file (user named it, comment in clipboard, or conversation history), call `write_file` to update it automatically. If unknown, ask: "Should I also update the source file? If so, which file?"
 
+            --- 
+
+            ## 15. Skills
+
+            If a `skills/INDEX.md` file exists in the working directory, read it once at the start of a task — it is small by design. Each row names a skill, describes when it applies, and gives its file path. If a row's description matches the user's request, read that skill's full file via `read_file` before proceeding, and follow its instructions for this task.
+
+            Do not read a skill file that did not match. Do not `list_dir` the `skills/` folder looking for skills not listed in `INDEX.md` — the index is the deliberate, complete entry point; anything not indexed is not yet available.
+
+            This is the exact text currently sitting in your local CodingAgent.cs (pulled from the sandbox copy at 1e95bd1/aaf047f — before your latest local edits to INDEX.md, but this section itself hasn't changed since it was written).
+
             ---
-            
     
             ## Quick Reference
 
