@@ -6,7 +6,7 @@ It ships with three presentation modes — a terminal UI (TUI), a web UI, and a 
 
 ---
 
-## Table of Contents
+## Table of Contents.
 
 - [Quick Start](#quick-start)
 - [Modes of Operation](#modes-of-operation)
