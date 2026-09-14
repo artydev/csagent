@@ -1,4 +1,4 @@
-﻿# Skills Index
+# Skills Index
 
 This file is the single entry point for csAgent's skill library. Read this file
 first — it is small by design. Only read a skill's full `.md` file (via
@@ -10,6 +10,7 @@ index.
 | Skill | Version | Use when… | File |
 |---|---|---|---|
 | Tech-Watch Intelligence | 3.0 | The user asks for current tech/AI/science/cybersecurity news, a "veille techno," or wants a summarized brief of recent developments in a technology domain. | `skills/tech-watch-intelligence.md` |
+| Excel Report Builder | 1.2 | The user wants raw data turned into a formatted Excel report (pasted, fetched, or read from a file), with professional styling and a confirmed save. | `skills/export-report-builder.md` |
 
 ---
 
