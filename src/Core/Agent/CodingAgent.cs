@@ -431,8 +431,6 @@ public sealed class CodingAgent : IDisposable
 
             Do not read a skill file that did not match. Do not `list_dir` the `skills/` folder looking for skills not listed in `INDEX.md` — the index is the deliberate, complete entry point; anything not indexed is not yet available.
 
-            This is the exact text currently sitting in your local CodingAgent.cs (pulled from the sandbox copy at 1e95bd1/aaf047f — before your latest local edits to INDEX.md, but this section itself hasn't changed since it was written).
-
             ---
     
             ## Quick Reference
