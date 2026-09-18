@@ -1,3 +1,4 @@
+using System.Security.Principal;
 using System.Text.Json.Nodes;
 using CsAgentUI.Core.Agent;
 using CsAgentUI.Core.Tasks;
@@ -209,9 +210,12 @@ public sealed class CodingAgent : IDisposable
     public static JsonObject SystemMessage(bool isWindows)
     {
         var obj = new JsonObject();
+        var  platform = isWindows ? "Windows" : "Unix-like";
         obj.Add("role", JsonValue.Create("system"));
         obj.Add("content", JsonValue.Create($$"""
             ## 0. Conversational Awareness
+
+            You are on the following platform : {{platform}}. You have access to the following tools: {{string.Join(", ", ToolDispatcher.ToolDefinitions.Select(t => t?["function"]?["name"]?.GetValue<string>()).Where(n => !string.IsNullOrWhiteSpace(n)))}}
 
             Not every user message is a task. Recognise the input type before doing anything else:
 

@@ -17,7 +17,9 @@ public sealed record AgentArguments(
     bool ShowVersion,
     bool ShowDoc,
     int MaxRetries = 6,
-    int RetryDelayMs = 1000);
+    int RetryDelayMs = 1000,
+    bool UsePropMem = true,
+    string PropositionFile = "agent_propositions.json");
 
 /// <summary>
 /// Pure argument parsing — no side effects, no console output.
@@ -41,10 +43,12 @@ public static class ArgumentParser
         var port = GetPort(args);
         var maxRetries = GetInt(args, "--max-retries", RetryPolicy.Default.MaxAttempts);
         var retryDelayMs = GetInt(args, "--retry-delay", RetryPolicy.Default.BaseDelayMs);
+        var usePropMem = !args.Contains("--no-propmem");
+        var propositionFile = GetValue(args, "--prop") ?? "agent_propositions.json";
 
         return new AgentArguments(memFile, modelOverride, mcpUrl, taskSlug,
             port, isUiMode, isLeanUiMode, isNativeMode, isDryRun,
-            showHelp, showVersion, showDoc, maxRetries, retryDelayMs);
+            showHelp, showVersion, showDoc, maxRetries, retryDelayMs, usePropMem, propositionFile);
     }
 
     private static string GetMemoryFile(string[] args)
@@ -56,7 +60,7 @@ public static class ArgumentParser
         {
             if (args[i] is "--model" or "--mcp" or "--mcp-url" or "--port"
                           or "-p" or "--max-retries" or "--retry-delay"
-                          or "--task")
+                          or "--task" or "--prop")
             { i++; continue; }
 
             if (args[i] != "--ui" && args[i] != "--leanui" && args[i] != "--native"

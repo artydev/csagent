@@ -8,4 +8,6 @@ public sealed record AgentOptions(
     bool Confirm = true,
     RetryPolicy? Retry = null,
     string? ResumeTaskId = null,
-    TaskTracker? Tracker = null);
+    TaskTracker? Tracker = null,
+    bool UsePropMem = true,
+    string PropositionFile = "agent_propositions.json");
