@@ -2,7 +2,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json.Nodes;
 
-namespace CsAgentUI.Core.Agent;
+namespace CsAgent.Core.Agent;
 
 public static partial class ToolDispatcher
 {
@@ -93,7 +93,7 @@ public static partial class ToolDispatcher
                       "&format=json&no_html=1&skip_disambig=1";
 
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("CsAgentUI/1.0");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("CsAgent/1.0");
 
             var json = await client.GetStringAsync(url);
             var root = JsonNode.Parse(json);
@@ -183,7 +183,7 @@ public static partial class ToolDispatcher
             if (maxChars > 100_000) maxChars = 100_000;
 
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) CsAgentUI/1.0");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) CsAgent/1.0");
 
             using var response = await client.GetAsync(uri);
             if (!response.IsSuccessStatusCode)

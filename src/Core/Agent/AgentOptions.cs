@@ -1,6 +1,6 @@
-using CsAgentUI.Core.Tasks;
+using CsAgent.Core.Tasks;
 
-namespace CsAgentUI;
+namespace CsAgent;
 
 public sealed record AgentOptions(
     int MaxSteps = 30,

@@ -24,7 +24,7 @@
 		<!-- This is a Web SDK project but does not use ASP.NET Core's static web
          assets pipeline (UI assets are embedded resources served via manual
          Minimal API endpoints instead). Disabling this removes the unused
-         CsAgentUI.staticwebassets.endpoints.json artifact from publish. -->
+         CsAgent.staticwebassets.endpoints.json artifact from publish. -->
 		<StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
 	</PropertyGroup>
 
@@ -56,7 +56,7 @@
 
 	<ItemGroup>
 		<!-- README.md is intentionally NOT copied to the publish directory —
-         publish output is kept to CsAgentUI.exe + skills/ only. It remains
+         publish output is kept to CsAgent.exe + skills/ only. It remains
          available in the repo itself for anyone browsing source. -->
 		<Content Include="skills\**">
 			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>

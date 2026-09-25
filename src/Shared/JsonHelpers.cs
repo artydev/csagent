@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace CsAgentUI.Shared;
+namespace CsAgent.Shared;
 
 /// <summary>
 /// Shared JSON helpers — AOT-safe, no trimming warnings.

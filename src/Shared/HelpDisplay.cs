@@ -1,4 +1,4 @@
-namespace CsAgentUI.Shared;
+namespace CsAgent.Shared;
 
 /// <summary>
 /// Renders the help text to the console.
@@ -41,7 +41,7 @@ public static class HelpDisplay
         Console.WriteLine("  Cross-platform autonomous coding agent  |  zero NuGet deps");
         Console.ResetColor();
         Console.WriteLine();
-        Console.WriteLine($"  USAGE:  CsAgentUI [options] [memory-file]");
+        Console.WriteLine($"  USAGE:  CsAgent [options] [memory-file]");
         Console.WriteLine();
         Console.WriteLine($"  VERSION:  {version}");
         Console.WriteLine();

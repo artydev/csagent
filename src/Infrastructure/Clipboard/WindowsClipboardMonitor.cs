@@ -4,7 +4,7 @@ using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace CsAgentUI.Infrastructure.Clipboard;
+namespace CsAgent.Infrastructure.Clipboard;
 
 public sealed record ClipboardImage(
     byte[] PngBytes,
@@ -29,7 +29,7 @@ public sealed partial class WindowsClipboardMonitor : IDisposable
 
     private static readonly object s_classSync = new();
     private static ushort s_windowClassAtom = 0;
-    private const string s_className = "CsAgentUI.ClipboardMonitor";
+    private const string s_className = "CsAgent.ClipboardMonitor";
 
     private readonly object _sync = new();
     private Thread? _thread;

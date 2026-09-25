@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace CsAgentUI;
+namespace CsAgent;
 
 /// <summary>
 /// Persistent store for atomic propositions extracted from conversations.

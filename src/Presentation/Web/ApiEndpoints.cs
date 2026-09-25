@@ -1,9 +1,9 @@
-using CsAgentUI;
-using CsAgentUI.Core.Tasks;
-using CsAgentUI.Infrastructure.Clipboard;
-using CsAgentUI.Shared;
+using CsAgent;
+using CsAgent.Core.Tasks;
+using CsAgent.Infrastructure.Clipboard;
+using CsAgent.Shared;
 
-namespace CsAgentUI.Endpoints;
+namespace CsAgent.Endpoints;
 
 public static class ApiEndpoints
 {

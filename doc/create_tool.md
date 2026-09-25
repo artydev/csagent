@@ -1,6 +1,6 @@
 # Adding a New Tool to ToolDispatcher
 
-This document describes the process for adding a new tool to the `ToolDispatcher` class in `CsAgentUI.Core.Agent`.
+This document describes the process for adding a new tool to the `ToolDispatcher` class in `CsAgent.Core.Agent`.
 
 ## Steps
 

@@ -1,10 +1,10 @@
 using System.Security.Principal;
 using System.Text.Json.Nodes;
-using CsAgentUI.Core.Agent;
-using CsAgentUI.Core.Tasks;
-using CsAgentUI.Shared;
+using CsAgent.Core.Agent;
+using CsAgent.Core.Tasks;
+using CsAgent.Shared;
 
-namespace CsAgentUI;
+namespace CsAgent;
 
 public sealed class CodingAgent : IDisposable
 {

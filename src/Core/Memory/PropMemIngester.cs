@@ -1,8 +1,8 @@
 using System.Text;
 using System.Text.Json.Nodes;
-using CsAgentUI.Shared;
+using CsAgent.Shared;
 
-namespace CsAgentUI;
+namespace CsAgent;
 
 /// <summary>
 /// End-of-session proposition extractor.

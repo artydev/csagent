@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 
-namespace CsAgentUI.Core.Agent;
+namespace CsAgent.Core.Agent;
 
 public static partial class ToolDispatcher
 {

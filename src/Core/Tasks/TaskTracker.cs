@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace CsAgentUI.Core.Tasks;
+namespace CsAgent.Core.Tasks;
 
 /// <summary>
 /// Host-side enforcement of the task-tracking convention described in the

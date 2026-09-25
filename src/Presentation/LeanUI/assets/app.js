@@ -1,7 +1,7 @@
 // =============================================================================
 // CSAgent Console — Frontend Application (Dracula multiplexer edition)
 // =============================================================================
-// Talks only to the local CSAgentUI.LeanUI host:
+// Talks only to the local CsAgent.LeanUI host:
 //   GET  /api/chat?prompt=...   (Server-Sent Events stream)
 // The backend owns the model + MCP tool loop entirely. This script never
 // contacts Ollama or an MCP server directly — it just renders whatever
@@ -35,7 +35,7 @@ const clearImageBtn = document.getElementById("clearImageBtn");
 /* ──────────────────────────────────────────────────────────────
    CONSTANTS
 ────────────────────────────────────────────────────────────── */
-// Same-origin SSE chat endpoint exposed by CsAgentUI.Endpoints via
+// Same-origin SSE chat endpoint exposed by CsAgent.Endpoints via
 // app.MapEndpoints(...) in LeanUIHost.Run(). Adjust here if the route differs.
 const CHAT_ENDPOINT = "/api/chat";
 

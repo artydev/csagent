@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json.Nodes;
 
-namespace CsAgentUI.Core.Agent;
+namespace CsAgent.Core.Agent;
 
 public static partial class ToolDispatcher
 {

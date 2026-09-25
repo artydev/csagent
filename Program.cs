@@ -1,11 +1,11 @@
 using System.Text;
-using CsAgentUI.Infrastructure.Clipboard;
-using CsAgentUI.Presentation.LeanUI;
-using CsAgentUI.Presentation.Tui;
-using CsAgentUI.Presentation.Web;
-using CsAgentUI.Shared;
+using CsAgent.Infrastructure.Clipboard;
+using CsAgent.Presentation.LeanUI;
+using CsAgent.Presentation.Tui;
+using CsAgent.Presentation.Web;
+using CsAgent.Shared;
 
-namespace CsAgentUI;
+namespace CsAgent;
 
 public static class Program
 {

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace CsAgentUI;
+namespace CsAgent;
 
 /// <summary>
 /// Console rendering helpers for the TUI interface.

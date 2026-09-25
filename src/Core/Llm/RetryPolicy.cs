@@ -1,4 +1,4 @@
-namespace CsAgentUI;
+namespace CsAgent;
 
 /// <summary>
 /// Describes how transient API failures (HTTP 429) are retried.

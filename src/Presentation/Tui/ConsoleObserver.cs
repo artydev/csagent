@@ -1,6 +1,6 @@
-using CsAgentUI.Shared;
+using CsAgent.Shared;
 
-namespace CsAgentUI;
+namespace CsAgent;
 
 public class ConsoleObserver : IAgentObserver
 {

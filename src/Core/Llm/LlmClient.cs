@@ -2,7 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json.Nodes;
 
-namespace CsAgentUI;
+namespace CsAgent;
 
 public sealed class LlmClient : IDisposable
 {

@@ -1,9 +1,9 @@
 using System.Diagnostics;
-using CsAgentUI.Endpoints;
-using CsAgentUI.Infrastructure.Clipboard;
-using CsAgentUI.Shared;
+using CsAgent.Endpoints;
+using CsAgent.Infrastructure.Clipboard;
+using CsAgent.Shared;
 
-namespace CsAgentUI.Presentation.LeanUI;
+namespace CsAgent.Presentation.LeanUI;
 
 public static class LeanUIHost
 {

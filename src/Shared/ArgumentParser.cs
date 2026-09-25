@@ -1,4 +1,4 @@
-namespace CsAgentUI.Shared;
+namespace CsAgent.Shared;
 
 /// <summary>
 /// Parsed CLI arguments — clean record, no parsing logic mixed in.

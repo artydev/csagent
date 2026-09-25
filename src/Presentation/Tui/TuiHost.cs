@@ -1,8 +1,8 @@
-using CsAgentUI.Core.Tasks;
-using CsAgentUI.Infrastructure.Clipboard;
-using CsAgentUI.Shared;
+using CsAgent.Core.Tasks;
+using CsAgent.Infrastructure.Clipboard;
+using CsAgent.Shared;
 
-namespace CsAgentUI.Presentation.Tui;
+namespace CsAgent.Presentation.Tui;
 
 public static class TuiHost
 {

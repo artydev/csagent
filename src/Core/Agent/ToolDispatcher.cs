@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 
-namespace CsAgentUI.Core.Agent;
+namespace CsAgent.Core.Agent;
 
 /// <summary>
 /// Pure tool execution logic — no observer, no agent loop.

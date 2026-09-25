@@ -2,7 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json.Nodes;
 
-namespace CsAgentUI.Core.Agent;
+namespace CsAgent.Core.Agent;
 
 /// <summary>
 /// Minimal MCP Streamable HTTP client. It intentionally depends only on the

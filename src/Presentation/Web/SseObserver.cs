@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http;
 
-namespace CsAgentUI;
+namespace CsAgent;
 
 /// <summary>
 /// Bridges the SSE confirm event and the POST /api/confirm response.

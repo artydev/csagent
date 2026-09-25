@@ -1,4 +1,4 @@
-namespace CsAgentUI;
+namespace CsAgent;
 
 public interface IAgentObserver
 {

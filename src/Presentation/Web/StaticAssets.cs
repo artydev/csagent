@@ -1,15 +1,15 @@
 using System.Reflection;
 
-namespace CsAgentUI;
+namespace CsAgent;
 
 public static class StaticAssets
 {
-    public static string HtmlUI => LoadEmbeddedResource("CsAgentUI.src.Presentation.Web.assets.index.html");
-    public static string JsUI => LoadEmbeddedResource("CsAgentUI.src.Presentation.Web.assets.app.js");
-    public static string CssUI => LoadEmbeddedResource("CsAgentUI.src.Presentation.Web.assets.styles.css");
+    public static string HtmlUI => LoadEmbeddedResource("CsAgent.src.Presentation.Web.assets.index.html");
+    public static string JsUI => LoadEmbeddedResource("CsAgent.src.Presentation.Web.assets.app.js");
+    public static string CssUI => LoadEmbeddedResource("CsAgent.src.Presentation.Web.assets.styles.css");
 
     // The README is embedded from the project root (README.md)
-    public static string ReadmeMd => LoadEmbeddedResource("CsAgentUI.README.md");
+    public static string ReadmeMd => LoadEmbeddedResource("CsAgent.README.md");
     
     private static string LoadEmbeddedResource(string resourceName)
     {

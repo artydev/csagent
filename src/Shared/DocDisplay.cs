@@ -1,4 +1,4 @@
-namespace CsAgentUI.Shared;
+namespace CsAgent.Shared;
 
 /// <summary>
 /// Renders the embedded README documentation to the console.

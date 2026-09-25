@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace CsAgentUI.Shared;
+namespace CsAgent.Shared;
 
 public record Tool(
     string Name,
