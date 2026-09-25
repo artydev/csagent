@@ -1,121 +1,66 @@
 // =============================================================================
-// CSAgent Console — Frontend Application (Dracula multiplexer edition)
+// CSAgent Console — Frontend Application
 // =============================================================================
-// Talks only to the local CSAgentUI.LeanUI host:
-//   GET  /api/chat?prompt=...   (Server-Sent Events stream)
-// The backend owns the model + MCP tool loop entirely. This script never
-// contacts Ollama or an MCP server directly — it just renders whatever
-// typed events the agent streams back, and keeps a local, per-tab log of
-// sessions for the terminal-style UI (each session is a local view; the
-// agent's own memory/history lives server-side via --memory-file).
+// Responsibilities:
+//   1. Parse Markdown and apply Prism syntax highlighting
+//   2. Handle user input and SSE (Server-Sent Events) chat stream
+//   3. Render messages into the log container
+//   4. Display step counter in the header
 // =============================================================================
 
-import { get, set, del } from 'https://cdn.jsdelivr.net/npm/idb-keyval@6/+esm';
-import { marked } from 'https://cdn.jsdelivr.net/npm/marked@12/+esm';
+// -----------------------------------------------------------------------------
+// SECTION 1 — Markdown & Syntax Highlighting
+// -----------------------------------------------------------------------------
 
-/* ──────────────────────────────────────────────────────────────
-   DOM REFS
-────────────────────────────────────────────────────────────── */
-const log = document.getElementById("log");
-const input = document.getElementById("input");
-const sessionBar = document.getElementById("sessionBar");
-const terminalPrompt = document.getElementById("terminalPrompt");
-const connDot = document.getElementById("connDot");
-const connStatusEl = document.getElementById("connStatus");
-const stepCounterEl = document.getElementById("stepCounter");
-const toolCountEl = document.getElementById("toolCount");
-const msgCountEl = document.getElementById("msgCount");
-const stopBtn = document.getElementById("stopBtn");
-const imageInput = document.getElementById("imageInput");
-const attachBtn = document.getElementById("attachBtn");
-const imagePreviewWrap = document.getElementById("imagePreviewWrap");
-const imagePreview = document.getElementById("imagePreview");
-const clearImageBtn = document.getElementById("clearImageBtn");
-
-/* ──────────────────────────────────────────────────────────────
-   CONSTANTS
-────────────────────────────────────────────────────────────── */
-// Same-origin SSE chat endpoint exposed by CsAgentUI.Endpoints via
-// app.MapEndpoints(...) in LeanUIHost.Run(). Adjust here if the route differs.
-const CHAT_ENDPOINT = "/api/chat";
-
-const REGISTRY_KEY = "csagent_registry_config";
-const SESSION_PREFIX = "csagent_session_";
-
-// Friendly labels for known tools (falls back to "🔧 <name>" otherwise).
-const TOOL_LABELS = {
-    write_file: "📝 Write File",
-    read_file: "📖 Read File",
-    list_dir: "📂 List Directory",
-    search_files: "🔍 Search Files",
-    sh: "💻 Shell Command",
-    switch_model: "🔄 Switch Model",
-    list_models: "🤖 List Models",
-    read_clipboard: "📋 Read Clipboard",
-    write_clipboard: "📋 Write Clipboard"
-};
-
-/* ──────────────────────────────────────────────────────────────
-   STATE
-────────────────────────────────────────────────────────────── */
-let registry = { currentActiveId: null, list: [] };
-
-// Persisted, replayable record of the active session:
-//   { kind: "user", content }
-//   { kind: "event", type, data }   (mirrors the SSE {type,data} payloads;
-//                                     "step" events are transient and skipped)
-let sessionHistory = [];
-
-// Tracks the tool-block DOM currently awaiting its matching "result" event,
-// so a `call` + its later `result` render as one collapsible block instead
-// of two separate log lines.
-let pendingToolBlock = null;
-
-// ── Command History ──────────────────────────────────────────────
-const CMD_HISTORY_MAX = 50;
-let cmdHistory = [];
-let historyIndex = -1;
-let historyDraft = "";
-
-// ── Active SSE connection ───────────────────────────────────────
-let currentStream = null;
-
-// ── Attached image file (set by the file picker, cleared after send) ─
-let attachedFile = null;
-
-function setGenerating(on) {
-    if (on) {
-        stopBtn.classList.add("visible");
-        input.disabled = true;
-        input.placeholder = "generating… (Esc to stop)";
-        setConnStatus("streaming");
-    } else {
-        stopBtn.classList.remove("visible");
-        input.disabled = false;
-        input.placeholder = "enter a prompt or /help…";
-        input.focus();
-        setConnStatus("ready");
-    }
-}
-
-/* ──────────────────────────────────────────────────────────────
-   SECTION 1 — Markdown & Syntax Highlighting
-────────────────────────────────────────────────────────────── */
-
+/**
+ * Normalise language class names so Prism can highlight them correctly.
+ *
+ * Prism uses 'markup' internally for HTML/XML/SVG, but Marked.js generates
+ * 'language-html' / 'language-xml'. We also map plain/text aliases to 'none'
+ * so Prism does not attempt highlighting.
+ *
+ * @param {string} className — The original class attribute value
+ * @returns {string} — The corrected class attribute value
+ */
 function normaliseLanguageClass(className) {
     let result = className;
+
+    // Map 'html' and 'xml' to Prism's internal 'markup'
     result = result.replace("language-html", "language-markup");
     result = result.replace("language-xml", "language-markup");
-    result = result.replace(/language-(text|plain|plaintext)/g, "language-none");
+
+    // Map plain-text aliases to 'none' (no highlighting)
+    result = result.replace(
+        /language-(text|plain|plaintext)/g,
+        "language-none"
+    );
+
     return result;
 }
 
+/**
+ * Ensure Prism language aliases are set up globally.
+ *
+ * Prism's 'markup' grammar covers HTML, XML and SVG, but it does not
+ * register 'html' or 'xml' as top-level language keys by default.
+ */
 function ensurePrismAliases() {
     if (typeof Prism === "undefined") return;
-    if (Prism.languages.markup && !Prism.languages.html) Prism.languages.html = Prism.languages.markup;
-    if (Prism.languages.markup && !Prism.languages.xml) Prism.languages.xml = Prism.languages.markup;
+
+    if (Prism.languages.markup && !Prism.languages.html) {
+        Prism.languages.html = Prism.languages.markup;
+    }
+    if (Prism.languages.markup && !Prism.languages.xml) {
+        Prism.languages.xml = Prism.languages.markup;
+    }
 }
 
+/**
+ * Fix language classes on every code/pre element inside a container so that
+ * Prism can recognise them.
+ *
+ * @param {HTMLElement} container — The parent element to search within
+ */
 function fixCodeLanguageClasses(container) {
     const selector = 'code[class*="language-"], pre[class*="language-"]';
     container.querySelectorAll(selector).forEach((element) => {
@@ -123,6 +68,12 @@ function fixCodeLanguageClasses(container) {
     });
 }
 
+/**
+ * Parse a Markdown string into an HTML element and apply syntax highlighting.
+ *
+ * @param {string} text — Raw Markdown content
+ * @returns {HTMLDivElement} — A div.markdown-content containing the rendered HTML
+ */
 function parseMarkdown(text) {
     const container = document.createElement("div");
     container.className = "markdown-content";
@@ -130,131 +81,191 @@ function parseMarkdown(text) {
 
     ensurePrismAliases();
     fixCodeLanguageClasses(container);
-    if (typeof Prism !== "undefined") Prism.highlightAllUnder(container);
+    Prism.highlightAllUnder(container);
 
     return container;
 }
 
-/* ──────────────────────────────────────────────────────────────
-   SECTION 2 — Message Rendering (SSE event → DOM)
-────────────────────────────────────────────────────────────── */
+// -----------------------------------------------------------------------------
+// SECTION 2 — Message Rendering
+// -----------------------------------------------------------------------------
 
+/**
+ * Create a DOM element for a "done" message (task completed).
+ *
+ * @returns {HTMLDivElement}
+ */
 function createDoneMessage() {
     const div = document.createElement("div");
-    div.className = "line sys done-line";
-    div.textContent = "✓ Task completed successfully";
+    div.className = "done";
+    div.innerText = "✓ Task completed successfully";
     return div;
 }
 
+/**
+ * Create a DOM element for a "warning" message.
+ *
+ * @param {string} text — The warning text
+ * @returns {HTMLDivElement}
+ */
 function createWarningMessage(text) {
     const div = document.createElement("div");
-    div.className = "line sys warn-line";
-    div.textContent = "⚠ " + text;
+    div.className = "warning";
+    div.innerText = "⚠ " + text;
     return div;
 }
 
+/**
+ * Create a DOM element for a "danger" (error) message.
+ *
+ * @param {string} text — The error text
+ * @returns {HTMLDivElement}
+ */
 function createDangerMessage(text) {
     const div = document.createElement("div");
-    div.className = "line err";
-    div.textContent = "✗ " + text;
+    div.className = "danger";
+    div.innerText = "✗ " + text;
     return div;
 }
 
 /**
- * Build (but do not insert) a collapsible tool-call block, initially in a
- * "running…" state. The caller keeps a reference so the matching "result"
- * event can fill it in later.
+ * Create a DOM element for a tool call message.
  *
- * @param {string} name    — tool name, e.g. "write_file"
+ * Displays the tool name prominently and formats the arguments
+ * as a structured list of key-value pairs.
+ *
+ * @param {string} name — The tool name (e.g. "write_file", "read_file")
  * @param {string} argsJson — JSON string of the tool arguments
+ * @returns {HTMLDivElement}
  */
-function createToolCallBlock(name, argsJson) {
-    const root = document.createElement("div");
-    root.className = "tool-block";
+function createToolCallMessage(name, argsJson) {
+    const div = document.createElement("div");
+    div.className = "call";
 
+    // Tool name header
     const header = document.createElement("div");
-    header.className = "tool-block-header";
-    header.innerHTML = `
-        <span class="tool-chevron">▶</span>
-        <span class="tool-block-label">${TOOL_LABELS[name] || "🔧 " + name}</span>
-        <span class="tool-block-badge">running…</span>`;
-    root.appendChild(header);
-    header.addEventListener("click", () => root.classList.toggle("open"));
+    header.className = "call-header";
 
-    const body = document.createElement("div");
-    body.className = "tool-block-body";
+    // Map tool names to readable labels with icons
+    const toolLabels = {
+        "write_file": "📝 Write File",
+        "read_file": "📖 Read File",
+        "list_dir": "📂 List Directory",
+        "search_files": "🔍 Search Files",
+        "sh": "💻 Shell Command",
+        "switch_model": "🔄 Switch Model",
+        "list_models": "🤖 List Models",
+        "read_clipboard": "📋 Read Clipboard",
+        "write_clipboard": "📋 Write Clipboard"
+    };
+    header.innerHTML = `<strong>${toolLabels[name] || "🔧 " + name}</strong>`;
+    div.appendChild(header);
 
-    const argsSection = document.createElement("div");
-    argsSection.className = "tool-block-section";
-    argsSection.innerHTML = `<div class="tool-block-section-label">arguments</div>`;
-    const argsCode = document.createElement("div");
-    argsCode.className = "tool-block-code";
+    // Parse and display arguments
     try {
-        argsCode.textContent = JSON.stringify(JSON.parse(argsJson), null, 2);
+        const args = JSON.parse(argsJson);
+        const argList = document.createElement("div");
+        argList.className = "call-args";
+
+        for (const [key, value] of Object.entries(args)) {
+            const argRow = document.createElement("div");
+            argRow.className = "call-arg-row";
+
+            const keySpan = document.createElement("span");
+            keySpan.className = "call-arg-key";
+            keySpan.textContent = key + ":";
+            argRow.appendChild(keySpan);
+
+            const valSpan = document.createElement("span");
+            valSpan.className = "call-arg-value";
+
+            // Truncate very long values
+            let displayVal = String(value);
+            if (displayVal.length > 300) {
+                displayVal = displayVal.substring(0, 300) + `... (${displayVal.length} chars total)`;
+            }
+            valSpan.textContent = displayVal;
+            argRow.appendChild(valSpan);
+
+            argList.appendChild(argRow);
+        }
+
+        div.appendChild(argList);
     } catch {
-        argsCode.textContent = argsJson ?? "";
+        // Fallback: show raw JSON in a styled pre block
+        const raw = document.createElement("pre");
+        raw.className = "call-raw";
+        raw.textContent = argsJson;
+        div.appendChild(raw);
     }
-    argsSection.appendChild(argsCode);
-    body.appendChild(argsSection);
 
-    const resultSection = document.createElement("div");
-    resultSection.className = "tool-block-section";
-    resultSection.innerHTML = `<div class="tool-block-section-label">result</div>`;
-    const resultCode = document.createElement("div");
-    resultCode.className = "tool-block-code result-text";
-    resultCode.textContent = "waiting for result…";
-    resultSection.appendChild(resultCode);
-    body.appendChild(resultSection);
-
-    root.appendChild(body);
-
-    return { root, header, badge: header.querySelector(".tool-block-badge"), resultCode };
+    return div;
 }
 
 /**
- * Apply a "result" event {r, e} to the pending tool block, or — if there
- * is no pending call (e.g. an orphaned result on replay) — render it as a
- * standalone line.
+ * Create a DOM element for a tool result message.
+ *
+ * Tool results are raw data (file contents, command output, errors),
+ * NOT Markdown. They are displayed as plain text in a code block
+ * to avoid Markdown rendering issues (e.g. '#' in file contents
+ * being treated as headings).
+ *
+ * @param {string} content — The raw result text
+ * @param {boolean} isError — Whether this is an error result
+ * @returns {HTMLDivElement}
  */
-function applyToolResult(resultText, isError, targetLog) {
-    if (pendingToolBlock) {
-        pendingToolBlock.resultCode.textContent = resultText ?? "";
-        pendingToolBlock.badge.textContent = isError ? "error" : "done";
-        if (isError) pendingToolBlock.root.classList.add("tool-error", "open");
-        pendingToolBlock = null;
-        return;
-    }
+function createToolResultMessage(content, isError) {
     const div = document.createElement("div");
-    div.className = isError ? "line err" : "line sys";
-    div.textContent = (isError ? "✗ " : "✓ ") + (resultText ?? "");
-    targetLog.appendChild(div);
+    div.className = isError ? "danger" : "result";
+
+    // Show a brief header
+    const header = document.createElement("div");
+    header.className = "result-header";
+    header.textContent = isError ? "✗ Error" : "✓ Result";
+    div.appendChild(header);
+
+    // Wrap content in a pre block for plain-text display
+    const pre = document.createElement("pre");
+    pre.className = "result-content";
+    pre.textContent = content;
+    div.appendChild(pre);
+
+    return div;
 }
 
+/**
+ * Create a DOM element for a generic log message.
+ *
+ * @param {string} type — The message type (used as CSS class)
+ * @param {string} content — The text content
+ * @returns {HTMLDivElement}
+ */
 function createGenericMessage(type, content) {
     const div = document.createElement("div");
     div.className = type;
 
     if (type === "thought") {
+        // Assistant thoughts are Markdown-formatted text
         div.appendChild(parseMarkdown(content));
     } else {
-        div.className = "line sys";
-        div.textContent = `[${type}] ${content}`;
+        div.innerText = `[${type}] ${content}`;
     }
 
     return div;
 }
 
 /**
- * Route an incoming event ({type, data}) to the correct renderer and
- * append it to the log. Handles "call"/"result" pairing specially since
- * they need to merge into one collapsible block rather than two lines.
+ * Create a confirmation block with Approve / Decline buttons.
+ *
+ * @param {string} toolName — The destructive tool awaiting approval
+ * @returns {HTMLDivElement}
  */
 function createConfirmBlock(toolName) {
     const wrap = document.createElement("div");
     wrap.className = "confirm-block";
     wrap.dataset.pending = "1";
 
-    const label = document.createElement("span");
+    const label = document.createElement("div");
     label.className = "confirm-label";
     label.textContent = `⚠ Allow destructive action: ${toolName}`;
     wrap.appendChild(label);
@@ -293,352 +304,134 @@ function createConfirmBlock(toolName) {
     return wrap;
 }
 
-function appendMessageToLog(message, targetLog) {
+/**
+ * Route an incoming SSE message to the correct renderer and append it to the log.
+ *
+ * @param {object} message — Parsed JSON object with `type` and `data` fields
+ * @param {HTMLElement} log — The log container element
+ */
+function appendMessageToLog(message, log) {
+    let element;
+
     switch (message.type) {
         case "done":
-            targetLog.appendChild(createDoneMessage());
-            return;
+            element = createDoneMessage();
+            break;
         case "warning":
-            targetLog.appendChild(createWarningMessage(
+            element = createWarningMessage(
                 typeof message.data === "string" ? message.data : JSON.stringify(message.data)
-            ));
-            return;
+            );
+            break;
         case "danger":
-        case "error":
-            targetLog.appendChild(createDangerMessage(
+            element = createDangerMessage(
                 typeof message.data === "string" ? message.data : JSON.stringify(message.data)
-            ));
-            return;
-        case "call": {
-            const { n: name, a: argsJson } = message.data || {};
-            const block = createToolCallBlock(name, argsJson);
-            targetLog.appendChild(block.root);
-            pendingToolBlock = block;
-            return;
-        }
-        case "result": {
-            const { r: resultText, e: isError } = message.data || {};
-            applyToolResult(resultText, isError, targetLog);
-            return;
-        }
+            );
+            break;
+        case "call":
+            // Tool call messages have data: { n: toolName, a: argsJson }
+            if (message.data && typeof message.data === "object" && message.data.n) {
+                element = createToolCallMessage(message.data.n, message.data.a);
+            } else {
+                element = createGenericMessage(message.type, JSON.stringify(message.data));
+            }
+            break;
+        case "result":
+            // Tool result messages have data: { r: resultText, e: isError }
+            if (message.data && typeof message.data === "object" && "r" in message.data) {
+                element = createToolResultMessage(message.data.r, message.data.e);
+            } else {
+                element = createGenericMessage(message.type, JSON.stringify(message.data));
+            }
+            break;
         case "confirm": {
             const toolName = typeof message.data === "object" ? message.data.tool : message.data;
-            targetLog.appendChild(createConfirmBlock(toolName));
-            scrollToBottom(targetLog);
-            return;
+            element = createConfirmBlock(toolName);
+            break;
         }
         default:
-            targetLog.appendChild(createGenericMessage(
+            element = createGenericMessage(
                 message.type,
                 typeof message.data === "string" ? message.data : JSON.stringify(message.data)
-            ));
-            return;
+            );
+            break;
     }
+
+    log.appendChild(element);
 }
 
-function scrollToBottom(targetLog) {
-    targetLog.scrollTop = targetLog.scrollHeight;
+/**
+ * Scroll the log container to the bottom.
+ *
+ * @param {HTMLElement} log
+ */
+function scrollToBottom(log) {
+    log.scrollTop = log.scrollHeight;
 }
 
-/* ──────────────────────────────────────────────────────────────
-   SECTION 3 — Step Counter
-────────────────────────────────────────────────────────────── */
+// -----------------------------------------------------------------------------
+// SECTION 3 — Step Counter
+// -----------------------------------------------------------------------------
 
+/**
+ * Update the step counter in the header.
+ *
+ * The step event data has the shape { n: currentStep, m: maxSteps }.
+ * When the task is done or an error occurs, reset to "Ready".
+ *
+ * @param {object} data — The step data object
+ */
 function updateStepCounter(data) {
-    if (!stepCounterEl) return;
+    const counter = document.getElementById("step-counter");
+    if (!counter) return;
+
     if (data && typeof data.n === "number" && typeof data.m === "number") {
-        stepCounterEl.textContent = `step ${data.n}/${data.m}`;
+        counter.textContent = `Step ${data.n} of ${data.m}`;
     }
 }
 
+/**
+ * Reset the step counter to its idle state.
+ */
 function resetStepCounter() {
-    if (stepCounterEl) stepCounterEl.textContent = "ready";
+    const counter = document.getElementById("step-counter");
+    if (counter) counter.textContent = "Ready";
 }
 
-/* ──────────────────────────────────────────────────────────────
-   SECTION 4 — Terminal print helper (client-side / system lines)
-────────────────────────────────────────────────────────────── */
+// -----------------------------------------------------------------------------
+// SECTION 4 — User Input
+// -----------------------------------------------------------------------------
 
-function print(text, cls = "sys") {
-    const div = document.createElement("div");
-    div.className = "line " + cls;
-    div.textContent = text;
-    log.appendChild(div);
-    scrollToBottom(log);
-    return div;
+/**
+ * Append the user's prompt to the log as a styled message.
+ *
+ * @param {string} prompt
+ * @param {HTMLElement} log
+ */
+function appendUserMessage(prompt, log) {
+    const userDiv = document.createElement("div");
+    userDiv.className = "user-msg";
+    userDiv.innerHTML = `<strong>> User:</strong> ${prompt}`;
+    log.appendChild(userDiv);
 }
 
-function printBanner() {
-    const lines = [
-        "╔══════════════════════════════════════════╗",
-        "║   🤖  CSAGENT CONSOLE  ·  DRACULA        ║",
-        "║       LeanUI  ·  SSE agent terminal      ║",
-        "╚══════════════════════════════════════════╝",
-    ];
-    lines.forEach(l => print(l, "banner-line"));
-    const hr = document.createElement("hr");
-    hr.className = "log-divider";
-    log.appendChild(hr);
-}
+// -----------------------------------------------------------------------------
+// SECTION 5 — Image Attach
+// -----------------------------------------------------------------------------
 
-function appendUserMessage(promptText, targetLog, sessionLabel) {
-    return print(`user@agent:[${sessionLabel}]~$ ${promptText}`, "user");
-}
+const imageInput = document.getElementById("imageInput");
+const attachBtn = document.getElementById("attachBtn");
+const imagePreviewWrap = document.getElementById("imagePreviewWrap");
+const imagePreview = document.getElementById("imagePreview");
+const clearImageBtn = document.getElementById("clearImageBtn");
+const stopBtn = document.getElementById("stopBtn");
 
-function updateStatusBar() {
-    const userMsgs = sessionHistory.filter(e => e.kind === "user").length;
-    const toolCalls = sessionHistory.filter(e => e.kind === "event" && e.type === "call").length;
-    msgCountEl.textContent = `${userMsgs} msg${userMsgs !== 1 ? 's' : ''}`;
-    toolCountEl.textContent = `${toolCalls} tool${toolCalls !== 1 ? 's' : ''}`;
-}
-
-function setConnStatus(state) {
-    // state: "ready" | "streaming" | "error"
-    connDot.className = "status-dot " + (state === "error" ? "offline" : "online");
-    connStatusEl.className = state === "error" ? "offline" : "";
-    connStatusEl.style.color = state === "error" ? "var(--red)" : "var(--green)";
-    connStatusEl.textContent =
-        state === "error" ? "disconnected" :
-            state === "streaming" ? "streaming" : "ready";
-}
-
-/* ──────────────────────────────────────────────────────────────
-   SECTION 5 — Persistence (IndexedDB via idb-keyval)
-────────────────────────────────────────────────────────────── */
-
-function persistEntry(entry) {
-    sessionHistory.push(entry);
-}
-
-async function saveAllToBrowser() {
-    try {
-        await set(REGISTRY_KEY, registry);
-        if (registry.currentActiveId) await set(SESSION_PREFIX + registry.currentActiveId, sessionHistory);
-    } catch (err) { console.error("Storage write error:", err); }
-}
-
-async function loadSessionData(sessionId) {
-    try {
-        const saved = await get(SESSION_PREFIX + sessionId);
-        sessionHistory = saved || [];
-        renderTerminalScreen();
-        renderTopMultiplexerBar();
-    } catch (err) { print("DB error: " + err.message, "err"); }
-}
-
-/* ──────────────────────────────────────────────────────────────
-   SECTION 6 — Session / Multiplexer UI
-────────────────────────────────────────────────────────────── */
-
-function renderTopMultiplexerBar() {
-    sessionBar.innerHTML = "";
-
-    registry.list.forEach((session, index) => {
-        const wrapper = document.createElement("div");
-        wrapper.className = "session-wrapper";
-
-        const tab = document.createElement("span");
-        const isActive = session.id === registry.currentActiveId;
-        tab.className = `session-tab ${isActive ? 'active' : ''}`;
-        tab.textContent = `${index}: ${session.name}`;
-
-        tab.addEventListener("click", () => { if (!isActive) switchSession(index); });
-
-        tab.addEventListener("dblclick", (e) => {
-            e.stopPropagation();
-            const editorInput = document.createElement("input");
-            editorInput.type = "text";
-            editorInput.className = "rename-input";
-            editorInput.value = session.name;
-
-            const finishRename = async () => {
-                const fresh = editorInput.value.trim();
-                if (fresh && fresh !== session.name) {
-                    session.name = fresh;
-                    await saveAllToBrowser();
-                    renderTerminalScreen();
-                }
-                renderTopMultiplexerBar();
-            };
-
-            editorInput.addEventListener("keydown", (ke) => {
-                if (ke.key === "Enter") finishRename();
-                if (ke.key === "Escape") renderTopMultiplexerBar();
-            });
-            editorInput.addEventListener("blur", finishRename);
-            wrapper.replaceChild(editorInput, tab);
-            editorInput.focus(); editorInput.select();
-        });
-
-        wrapper.appendChild(tab);
-
-        const delBtn = document.createElement("span");
-        delBtn.className = "delete-btn";
-        delBtn.textContent = "✕";
-        delBtn.title = "Delete session";
-        delBtn.addEventListener("click", (e) => { e.stopPropagation(); handleDeleteSessionConfirmation(index); });
-        wrapper.appendChild(delBtn);
-        sessionBar.appendChild(wrapper);
-    });
-
-    const actions = document.createElement("div");
-    actions.className = "bar-actions-group";
-
-    const newBtn = document.createElement("span");
-    newBtn.className = "bar-btn new-session-btn";
-    newBtn.textContent = "+ New";
-    newBtn.title = "Create new session";
-    newBtn.addEventListener("click", () => handleCreateSession());
-    actions.appendChild(newBtn);
-
-    const wipeBtn = document.createElement("span");
-    wipeBtn.className = "bar-btn wipe-workspace-btn";
-    wipeBtn.textContent = "Wipe All";
-    wipeBtn.title = "Erase all sessions";
-    wipeBtn.addEventListener("click", () => handleWipeAllSessionsConfirmation());
-    actions.appendChild(wipeBtn);
-
-    sessionBar.appendChild(actions);
-    updateStatusBar();
-}
-
-function renderTerminalScreen() {
-    log.innerHTML = "";
-    pendingToolBlock = null;
-
-    const cur = registry.list.find(s => s.id === registry.currentActiveId);
-    const name = cur ? cur.name : "none";
-    terminalPrompt.textContent = `user@agent:[${name}]~$`;
-
-    if (!cur) {
-        printBanner();
-        print("No active session. Click '+ New' or type /new to begin.", "sys");
-        return;
-    }
-
-    if (sessionHistory.length === 0) {
-        printBanner();
-        print(`Session [${name}] ready.`, "sys");
-        print("Type /help for available commands.", "sys");
-        return;
-    }
-
-    sessionHistory.forEach(entry => {
-        if (entry.kind === "user") {
-            appendUserMessage(entry.content, log, name);
-        } else if (entry.kind === "event") {
-            appendMessageToLog({ type: entry.type, data: entry.data }, log);
-        }
-    });
-    scrollToBottom(log);
-}
-
-async function handleCreateSession(customName = null) {
-    if (registry.currentActiveId) {
-        try { await set(SESSION_PREFIX + registry.currentActiveId, sessionHistory); }
-        catch (e) { console.error("Failed to save current session before switching:", e); }
-    }
-
-    const id = "s_" + Date.now();
-    const name = customName?.trim() || `session-${registry.list.length}`;
-    registry.list.push({ id, name });
-    registry.currentActiveId = id;
-    sessionHistory = [];
-    await saveAllToBrowser();
-    renderTopMultiplexerBar();
-    renderTerminalScreen();
-}
-
-async function switchSession(index) {
-    const t = registry.list[index];
-    if (!t || t.id === registry.currentActiveId) return;
-
-    if (registry.currentActiveId) {
-        try { await set(SESSION_PREFIX + registry.currentActiveId, sessionHistory); }
-        catch (e) { console.error("Failed to save session before switch:", e); }
-    }
-
-    registry.currentActiveId = t.id;
-    await set(REGISTRY_KEY, registry);
-    await loadSessionData(t.id);
-}
-
-async function handleDeleteSessionConfirmation(index) {
-    const s = registry.list[index];
-    if (!s) return;
-    if (confirm(`Delete session "${s.name}"?`)) {
-        await del(SESSION_PREFIX + s.id);
-        registry.list.splice(index, 1);
-        if (registry.currentActiveId === s.id) {
-            if (registry.list.length > 0) {
-                registry.currentActiveId = registry.list[Math.max(0, index - 1)].id;
-                await set(REGISTRY_KEY, registry);
-                await loadSessionData(registry.currentActiveId);
-            } else {
-                registry.currentActiveId = null;
-                sessionHistory = [];
-                await set(REGISTRY_KEY, registry);
-                renderTopMultiplexerBar();
-                renderTerminalScreen();
-            }
-        } else {
-            await set(REGISTRY_KEY, registry);
-            renderTopMultiplexerBar();
-        }
-    }
-}
-
-async function handleWipeAllSessionsConfirmation() {
-    if (prompt("Type WIPE to erase all sessions:") === "WIPE") {
-        for (const s of registry.list) await del(SESSION_PREFIX + s.id);
-        await del(REGISTRY_KEY);
-        registry.list = [];
-        registry.currentActiveId = null;
-        sessionHistory = [];
-        await handleCreateSession("general");
-    }
-}
-
-async function handleSlashCommand(raw) {
-    const parts = raw.trim().split(" ");
-    const cmd = parts[0].toLowerCase();
-    const args = parts.slice(1).join(" ");
-
-    if (cmd === "/new") {
-        await handleCreateSession(args || null);
-    } else if (cmd === "/clear") {
-        log.innerHTML = "";
-        printBanner();
-    } else if (cmd === "/help") {
-        const cmds = [
-            ["  /new [name]", "create a new session tab"],
-            ["  /clear", "clear the terminal output"],
-            ["  /help", "show this help message"],
-        ];
-        const keys = [
-            ["  ↑ / ↓", "cycle through command history"],
-            ["  Esc", "stop current generation"],
-            ["  Enter", "send prompt"],
-        ];
-        print("── commands ──────────────────────────────────", "sys");
-        cmds.forEach(([c, d]) => print(`${c.padEnd(18)} — ${d}`, "sys"));
-        print("── keyboard shortcuts ────────────────────────", "sys");
-        keys.forEach(([c, d]) => print(`${c.padEnd(18)} — ${d}`, "sys"));
-        print("──────────────────────────────────────────────", "sys");
-    } else {
-        print(`unknown command: ${cmd}  (try /help)`, "err");
-    }
-}
-
-/* ──────────────────────────────────────────────────────────────
-   SECTION 7 — Image attach helpers
-────────────────────────────────────────────────────────────── */
+let attachedFile = null;
+let currentStream = null;
 
 function setAttachedFile(file) {
     attachedFile = file;
     if (file) {
-        const objectUrl = URL.createObjectURL(file);
-        imagePreview.src = objectUrl;
+        imagePreview.src = URL.createObjectURL(file);
         imagePreviewWrap.style.display = "flex";
         attachBtn.classList.add("has-image");
     } else {
@@ -650,180 +443,143 @@ function setAttachedFile(file) {
 }
 
 attachBtn.addEventListener("click", () => imageInput.click());
-
-imageInput.addEventListener("change", () => {
-    const file = imageInput.files?.[0] ?? null;
-    setAttachedFile(file);
-});
-
+imageInput.addEventListener("change", () => setAttachedFile(imageInput.files?.[0] ?? null));
 clearImageBtn.addEventListener("click", () => setAttachedFile(null));
+// Wired here rather than via an inline onclick: app.js is loaded as a module,
+// so its functions are not globals the HTML can reference.
+stopBtn.addEventListener("click", () => stopGeneration());
 
-/* ──────────────────────────────────────────────────────────────
-   SECTION 8 — SSE Chat Stream
-────────────────────────────────────────────────────────────── */
+// -----------------------------------------------------------------------------
+// SECTION 6 — SSE Stream (GET for text-only, POST for image)
+// -----------------------------------------------------------------------------
 
 /**
- * Handle one parsed SSE event object {type, data}.
- * Returns true when the stream should be considered finished.
+ * Shared SSE message handler. Returns true when the stream should be closed.
  */
-function handleSseMessage(message, targetLog) {
+function handleSseMessage(message, log) {
     if (message.type === "step") {
         updateStepCounter(message.data);
         return false;
     }
-
-    appendMessageToLog(message, targetLog);
-    persistEntry({ kind: "event", type: message.type, data: message.data });
-    scrollToBottom(targetLog);
-    updateStatusBar();
-
+    appendMessageToLog(message, log);
+    scrollToBottom(log);
     return message.type === "done" || message.type === "error" || message.type === "danger";
 }
 
 /**
- * Text-only path: GET /api/chat via EventSource (kept for backward compat).
+ * Text-only path: GET /api/chat via EventSource.
  */
-function startChatStreamGet(promptText, targetLog) {
-    const url = `${CHAT_ENDPOINT}?prompt=${encodeURIComponent(promptText)}`;
+function startChatStreamGet(prompt, log) {
+    const url = `/api/chat?prompt=${encodeURIComponent(prompt)}`;
     const stream = new EventSource(url);
 
-    stream.onmessage = (event) => {
-        let message;
-        try { message = JSON.parse(event.data); } catch { return; }
-
-        const finished = handleSseMessage(message, targetLog);
-        if (finished) {
+    stream.onmessage = function (event) {
+        const message = JSON.parse(event.data);
+        if (handleSseMessage(message, log)) {
             resetStepCounter();
             stream.close();
             currentStream = null;
             setGenerating(false);
-            saveAllToBrowser();
         }
     };
 
-    stream.onerror = () => {
-        print("✗ Connection to agent lost.", "err");
+    stream.onerror = function () {
+        console.error("SSE connection error — closing stream.");
         resetStepCounter();
         stream.close();
         currentStream = null;
         setGenerating(false);
-        setConnStatus("error");
-        saveAllToBrowser();
     };
 
-    // Return an object with a .close() so stopGeneration() works uniformly
     return stream;
 }
 
 /**
  * Image path: POST /api/chat via fetch + ReadableStream.
- * EventSource only supports GET, so we use fetch to stream the SSE response
- * from a multipart/form-data POST. The AbortController lets us cancel it.
+ * EventSource only supports GET, so we use fetch for multipart POST.
  */
-function startChatStreamPost(promptText, imageFile, targetLog) {
+function startChatStreamPost(prompt, imageFile, log) {
     const controller = new AbortController();
 
     const form = new FormData();
-    form.append("prompt", promptText);
+    form.append("prompt", prompt);
     form.append("image", imageFile, imageFile.name);
 
     (async () => {
         let response;
         try {
-            response = await fetch(CHAT_ENDPOINT, {
+            response = await fetch("/api/chat", {
                 method: "POST",
                 body: form,
                 signal: controller.signal,
             });
         } catch (err) {
-            if (err.name === "AbortError") return;
-            print("✗ Failed to connect to agent.", "err");
+            if (err.name !== "AbortError") {
+                console.error("Fetch error:", err);
+            }
             resetStepCounter();
             currentStream = null;
             setGenerating(false);
-            setConnStatus("error");
-            saveAllToBrowser();
             return;
         }
 
         if (!response.ok) {
             const text = await response.text().catch(() => response.statusText);
-            print(`✗ Server error ${response.status}: ${text}`, "err");
+            const errDiv = document.createElement("div");
+            errDiv.className = "danger";
+            errDiv.textContent = `✗ Server error ${response.status}: ${text}`;
+            log.appendChild(errDiv);
+            scrollToBottom(log);
             resetStepCounter();
             currentStream = null;
             setGenerating(false);
-            setConnStatus("error");
-            saveAllToBrowser();
             return;
         }
 
-        // Parse the response body as a stream of SSE lines
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
 
-        // eslint-disable-next-line no-constant-condition
         while (true) {
             let done, value;
-            try {
-                ({ done, value } = await reader.read());
-            } catch (err) {
-                if (err.name !== "AbortError") {
-                    print("✗ Stream read error.", "err");
-                    setConnStatus("error");
-                }
+            try { ({ done, value } = await reader.read()); }
+            catch (err) {
+                if (err.name !== "AbortError") console.error("Stream read error:", err);
                 break;
             }
             if (done) break;
 
             buffer += decoder.decode(value, { stream: true });
-
-            // SSE events are separated by double newlines
             const parts = buffer.split("\n\n");
-            buffer = parts.pop(); // keep the incomplete trailing chunk
+            buffer = parts.pop();
 
             for (const part of parts) {
-                // Each part may have one or more "data: ..." lines
                 for (const line of part.split("\n")) {
                     if (!line.startsWith("data:")) continue;
-                    const raw = line.slice(5).trim();
                     let message;
-                    try { message = JSON.parse(raw); } catch { continue; }
-
-                    const finished = handleSseMessage(message, targetLog);
-                    if (finished) {
+                    try { message = JSON.parse(line.slice(5).trim()); } catch { continue; }
+                    if (handleSseMessage(message, log)) {
                         resetStepCounter();
                         currentStream = null;
                         setGenerating(false);
-                        saveAllToBrowser();
                         return;
                     }
                 }
             }
         }
 
-        // Stream ended without an explicit done/error event
         if (currentStream !== null) {
             resetStepCounter();
             currentStream = null;
             setGenerating(false);
-            saveAllToBrowser();
         }
     })();
 
-    // Return an object with .close() so stopGeneration() works uniformly
     return { close: () => controller.abort() };
 }
 
-/**
- * Public entry point — dispatches to GET or POST path depending on
- * whether an image is attached.
- */
-function startChatStream(promptText, imageFile, targetLog) {
-    if (imageFile) {
-        return startChatStreamPost(promptText, imageFile, targetLog);
-    }
-    return startChatStreamGet(promptText, targetLog);
+function setGenerating(active) {
+    stopBtn.disabled = !active;
 }
 
 function stopGeneration() {
@@ -831,137 +587,83 @@ function stopGeneration() {
     currentStream.close();
     currentStream = null;
     resetStepCounter();
-    pendingToolBlock = null;
-    print("⚠ Generation stopped by user.", "sys");
     setGenerating(false);
-    saveAllToBrowser();
+    const log = document.getElementById("log");
+    const div = document.createElement("div");
+    div.className = "warning";
+    div.textContent = "⚠ Generation stopped by user.";
+    log.appendChild(div);
+    scrollToBottom(log);
 }
 
-async function askAI(promptText) {
-    const cur = registry.list.find(s => s.id === registry.currentActiveId);
-    const label = cur ? cur.name : "~";
+// -----------------------------------------------------------------------------
+// SECTION 7 — Main Entry Point + Keyboard Wiring
+// -----------------------------------------------------------------------------
 
-    // Snapshot and clear the attached file before async work so a second
-    // submit can't accidentally re-use the same image.
+/**
+ * Main entry point — called on Enter or button click.
+ */
+function run() {
+    const input = document.getElementById("in");
+    const prompt = input.value.trim();
+    if (!prompt || currentStream) return;
+
+    const log = document.getElementById("log");
+
+    // Show image indicator in log when an image is attached
+    if (attachedFile) {
+        const div = document.createElement("div");
+        div.className = "user-msg";
+        div.innerHTML = `<strong>> User:</strong> 📎 [${attachedFile.name}] ${prompt}`;
+        log.appendChild(div);
+    } else {
+        appendUserMessage(prompt, log);
+    }
+
     const imageFile = attachedFile;
     setAttachedFile(null);
+    input.value = "";
+    scrollToBottom(log);
 
-    // Show image indicator in the log when an image is attached
-    if (imageFile) {
-        const imgLine = document.createElement("div");
-        imgLine.className = "line sys";
-        imgLine.textContent = `📎 [image: ${imageFile.name}] ${promptText}`;
-        log.appendChild(imgLine);
-        persistEntry({ kind: "user", content: `[image: ${imageFile.name}] ${promptText}` });
-    } else {
-        appendUserMessage(promptText, log, label);
-        persistEntry({ kind: "user", content: promptText });
-    }
-
-    updateStatusBar();
-    await saveAllToBrowser();
-
-    pendingToolBlock = null;
     setGenerating(true);
-    currentStream = startChatStream(promptText, imageFile, log);
+    currentStream = imageFile
+        ? startChatStreamPost(prompt, imageFile, log)
+        : startChatStreamGet(prompt, log);
 }
 
-/* ──────────────────────────────────────────────────────────────
-   STOP BUTTON
-────────────────────────────────────────────────────────────── */
-stopBtn.addEventListener("click", stopGeneration);
+// Command history state
+const cmdHistory = [];
+let histIndex = -1;
 
-/* ──────────────────────────────────────────────────────────────
-   INPUT HANDLER (command history + stop on Esc + submit)
-────────────────────────────────────────────────────────────── */
-input.addEventListener("keydown", async (e) => {
-
-    if (e.key === "Escape") {
-        stopGeneration();
-        return;
-    }
-
+// Single keydown listener — history push must happen before run() clears the input
+document.getElementById("in").addEventListener("keydown", function (e) {
     if (e.key === "ArrowUp") {
         e.preventDefault();
-        if (cmdHistory.length === 0) return;
-        if (historyIndex === -1) {
-            historyDraft = input.value;
-            historyIndex = cmdHistory.length - 1;
-        } else if (historyIndex > 0) {
-            historyIndex--;
+        if (histIndex < cmdHistory.length - 1) {
+            histIndex++;
+            this.value = cmdHistory[histIndex];
         }
-        input.value = cmdHistory[historyIndex];
-        requestAnimationFrame(() => { input.selectionStart = input.selectionEnd = input.value.length; });
-        return;
-    }
-
-    if (e.key === "ArrowDown") {
+    } else if (e.key === "ArrowDown") {
         e.preventDefault();
-        if (historyIndex === -1) return;
-        if (historyIndex < cmdHistory.length - 1) {
-            historyIndex++;
-            input.value = cmdHistory[historyIndex];
+        if (histIndex > 0) {
+            histIndex--;
+            this.value = cmdHistory[histIndex];
         } else {
-            historyIndex = -1;
-            input.value = historyDraft;
+            histIndex = -1;
+            this.value = "";
         }
-        requestAnimationFrame(() => { input.selectionStart = input.selectionEnd = input.value.length; });
-        return;
-    }
-
-    if (e.key !== "Enter") {
-        if (historyIndex !== -1) historyIndex = -1;
-        return;
-    }
-
-    const value = input.value.trim();
-    if (!value) return;
-    input.value = "";
-    historyIndex = -1;
-    historyDraft = "";
-
-    if (cmdHistory[cmdHistory.length - 1] !== value) {
-        cmdHistory.push(value);
-        if (cmdHistory.length > CMD_HISTORY_MAX) cmdHistory.shift();
-    }
-
-    if (value.startsWith("/")) {
-        print(`client:[cmd]~$ ${value}`, "user");
-        await handleSlashCommand(value);
-    } else {
-        if (!registry.currentActiveId) {
-            print("No active session. Type /new to start one.", "err");
-            return;
+    } else if (e.key === "Enter" && !e.shiftKey) {
+        const prompt = this.value.trim();
+        if (prompt) {
+            cmdHistory.unshift(prompt); // push before run() clears the field
+            if (cmdHistory.length > 50) cmdHistory.pop();
+            histIndex = -1;
         }
-        await askAI(value);
+        run();
+    } else if (e.key === "Escape") {
+        stopGeneration();
     }
 });
 
-/* ──────────────────────────────────────────────────────────────
-   MAIN
-────────────────────────────────────────────────────────────── */
-async function main() {
-    try {
-        const saved = await get(REGISTRY_KEY);
-        if (saved?.list?.length) {
-            registry = saved;
-        } else {
-            const id = "s_" + Date.now();
-            registry.list.push({ id, name: "general" });
-            registry.currentActiveId = id;
-        }
-    } catch {
-        const id = "s_" + Date.now();
-        registry.list.push({ id, name: "general" });
-        registry.currentActiveId = id;
-    }
-
-    setConnStatus("ready");
-    renderTopMultiplexerBar();
-    await loadSessionData(registry.currentActiveId);
-    updateStatusBar();
-
-    input.focus();
-}
-
-main();
+// Initialise stop button state
+setGenerating(false);
